@@ -6,6 +6,7 @@ import { todayLabel } from "@/lib/format";
 import { focusedProjects } from "@/lib/focus";
 import { inboxThoughts } from "@/lib/seed";
 import { useStore } from "@/lib/store";
+import { captureKindLabel } from "@/lib/thought";
 import { DOMAINS } from "@/lib/types";
 import { DOMAIN_TINT } from "@/lib/ui";
 
@@ -129,7 +130,7 @@ export default function TodayPage() {
       <section>
         <h2 className="font-display text-2xl text-ink">Inbox</h2>
         <p className="mt-1 text-sm text-muted">
-          {inbox.length} unsorted thought{inbox.length === 1 ? "" : "s"}. Attach
+          {inbox.length} unsorted capture{inbox.length === 1 ? "" : "s"}. Attach
           to a project when you know where it belongs.
         </p>
         <div className="mt-3 space-y-2">
@@ -143,7 +144,10 @@ export default function TodayPage() {
                 key={thought.id}
                 className="rounded-2xl border border-line bg-card p-4"
               >
-                <p className="text-sm leading-6 text-ink">{thought.body}</p>
+                <p className="text-xs uppercase tracking-wide text-muted">
+                  {captureKindLabel(thought.kind)} · {thought.domain}
+                </p>
+                <p className="mt-1 text-sm leading-6 text-ink">{thought.body}</p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <select
                     className="rounded-lg border border-line bg-bg px-2 py-1 text-xs text-ink"

@@ -16,8 +16,13 @@ describe("seed data", () => {
     expect(focusedProjects(seedProjects).length).toBeLessThanOrEqual(3);
   });
 
-  it("includes inbox thoughts and at least one attached note", () => {
+  it("includes inbox captures with kind and domain, plus one attached note", () => {
     expect(inboxThoughts(seedThoughts).length).toBeGreaterThanOrEqual(2);
+    expect(seedThoughts.every((thought) => thought.kind && thought.domain)).toBe(
+      true,
+    );
+    expect(seedThoughts.some((thought) => thought.kind === "idea")).toBe(true);
+    expect(seedThoughts.some((thought) => thought.kind === "todo")).toBe(true);
     expect(seedThoughts.some((thought) => thought.projectId !== null)).toBe(
       true,
     );

@@ -1,5 +1,10 @@
 import { DB_NAME, DB_VERSION } from "./constants";
 import { seedLanes, seedProjects, seedThoughts } from "./seed";
+import {
+  normalizeThought,
+  projectDomainMap,
+  thoughtNeedsMigration,
+} from "./thought";
 import type { Lane, Project, Thought } from "./types";
 
 type StoreName = "projects" | "thoughts" | "lanes" | "meta";
@@ -23,6 +28,7 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains("meta")) {
         db.createObjectStore("meta", { keyPath: "key" });
       }
+      // v2: thought records gain kind + domain in loadSnapshot (no new stores).
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -89,11 +95,23 @@ export async function loadSnapshot(): Promise<{
     await put("meta", { key: "seeded", value: "v1" });
   }
 
-  const [projects, thoughts, lanes] = await Promise.all([
+  const [projects, rawThoughts, lanes] = await Promise.all([
     getAll<Project>("projects"),
-    getAll<Thought>("thoughts"),
+    getAll<unknown>("thoughts"),
     getAll<Lane>("lanes"),
   ]);
+
+  const domainByProject = projectDomainMap(projects);
+  const thoughts: Thought[] = [];
+  let migrated = false;
+  for (const raw of rawThoughts) {
+    const thought = normalizeThought(raw, domainByProject);
+    if (!thought) continue;
+    thoughts.push(thought);
+    if (thoughtNeedsMigration(raw)) migrated = true;
+  }
+  if (migrated) await putMany("thoughts", thoughts);
+
   return { projects, thoughts, lanes };
 }
 

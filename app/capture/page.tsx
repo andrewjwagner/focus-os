@@ -1,44 +1,117 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { DictateControl } from "@/components/DictateControl";
+import { validateCapture } from "@/lib/capture";
+import { insertTranscript } from "@/lib/speech";
 import { useStore } from "@/lib/store";
-import { DOMAINS, type Domain, type Status } from "@/lib/types";
+import { payloadFromProject, payloadFromThought } from "@/lib/triage";
+import { DOMAINS, type CaptureItemKind, type Domain, type Status } from "@/lib/types";
 import { fieldClass } from "@/lib/ui";
+
+type CaptureKind = CaptureItemKind | "project";
+
+function handoffToTriage(payload: unknown) {
+  void fetch("/api/capture/triage", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).catch(() => {
+    // Local save already succeeded.
+  });
+}
 
 export default function CapturePage() {
   const store = useStore();
   const router = useRouter();
-  const [kind, setKind] = useState<"thought" | "project">("thought");
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const bodyValueRef = useRef("");
+  const selectionRef = useRef({ start: 0, end: 0 });
+  const [kind, setKind] = useState<CaptureKind>("idea");
   const [body, setBody] = useState("");
-  const [thoughtProjectId, setThoughtProjectId] = useState("");
+  const [itemDomain, setItemDomain] = useState<Domain | "">("");
+  const [itemProjectId, setItemProjectId] = useState("");
   const [name, setName] = useState("");
-  const [domain, setDomain] = useState<Domain>("Ideas");
+  const [projectDomain, setProjectDomain] = useState<Domain>("Ideas");
   const [outcome, setOutcome] = useState("");
   const [nextAction, setNextAction] = useState("");
   const [status, setStatus] = useState<Status>("active");
-  const [saved, setSaved] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  function setBodyAndCaret(next: string, start: number, end = start) {
+    bodyValueRef.current = next;
+    selectionRef.current = { start, end };
+    setBody(next);
+  }
+
+  function applyTranscript(spoken: string) {
+    const current = bodyValueRef.current;
+    const { start, end } = selectionRef.current;
+    const result = insertTranscript(current, spoken, start, end);
+    setBodyAndCaret(result.next, result.caret);
+    requestAnimationFrame(() => {
+      const el = bodyRef.current;
+      el?.focus();
+      el?.setSelectionRange(result.caret, result.caret);
+    });
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    setSaved(null);
-    if (kind === "thought") {
-      if (!body.trim()) return;
-      await store.captureThought(body, thoughtProjectId || null);
-      setBody("");
-      setThoughtProjectId("");
-      setSaved("Thought captured.");
+    setError(null);
+    if (kind === "idea" || kind === "todo") {
+      const check = validateCapture({
+        kind,
+        body,
+        domain: itemDomain,
+        projectId: itemProjectId || null,
+      });
+      if (!check.ok) {
+        setError(
+          check.reason === "domain"
+            ? "Pick a domain before saving."
+            : "Write the idea or todo first.",
+        );
+        return;
+      }
+      const thought = await store.captureThought({
+        kind,
+        body,
+        domain: itemDomain as Domain,
+        projectId: itemProjectId || null,
+      });
+      handoffToTriage(payloadFromThought(thought));
+      setBodyAndCaret("", 0);
+      setItemProjectId("");
       router.push("/");
       return;
     }
-    if (!name.trim()) return;
-    const project = await store.captureProject({
+
+    const check = validateCapture({
+      kind: "project",
       name,
-      domain,
+      domain: projectDomain,
       outcome,
       nextAction,
       status,
     });
+    if (!check.ok) {
+      setError(
+        check.reason === "name"
+          ? "Name the project before saving."
+          : "Pick a domain before saving.",
+      );
+      return;
+    }
+    const project = await store.captureProject({
+      name,
+      domain: projectDomain,
+      outcome,
+      nextAction,
+      status,
+    });
+    handoffToTriage(payloadFromProject(project));
     router.push(`/projects/${project.id}`);
   }
 
@@ -48,12 +121,13 @@ export default function CapturePage() {
         <p className="text-xs uppercase tracking-[0.2em] text-focus">Capture</p>
         <h1 className="mt-2 font-display text-4xl text-ink">Get it out of chat.</h1>
         <p className="mt-2 text-sm leading-6 text-muted">
-          Fast add a thought or a project. Web is enough for dogfood.
+          Fast add an idea, a todo, or a project. Saved here first, then handed
+          off to triage if a webhook is configured.
         </p>
       </section>
 
-      <div className="flex gap-2">
-        {(["thought", "project"] as const).map((option) => (
+      <div className="flex flex-wrap gap-2">
+        {(["idea", "todo", "project"] as const).map((option) => (
           <button
             key={option}
             type="button"
@@ -64,30 +138,72 @@ export default function CapturePage() {
                 : "border border-line text-muted"
             }`}
           >
-            {option === "thought" ? "Thought" : "Project"}
+            {option === "idea" ? "Idea" : option === "todo" ? "Todo" : "Project"}
           </button>
         ))}
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4 rounded-2xl border border-line bg-card p-5">
-        {kind === "thought" ? (
+        {kind === "idea" || kind === "todo" ? (
           <>
-            <label className="block text-sm text-muted">
-              Thought
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <label htmlFor="capture-body" className="text-sm text-muted">
+                  {kind === "todo" ? "Todo" : "Idea"}
+                </label>
+                <DictateControl onTranscript={applyTranscript} />
+              </div>
               <textarea
+                id="capture-body"
+                ref={bodyRef}
                 value={body}
-                onChange={(event) => setBody(event.target.value)}
+                onChange={(event) => {
+                  const el = event.target;
+                  setBodyAndCaret(el.value, el.selectionStart, el.selectionEnd);
+                }}
+                onSelect={(event) => {
+                  const el = event.currentTarget;
+                  selectionRef.current = {
+                    start: el.selectionStart,
+                    end: el.selectionEnd,
+                  };
+                }}
                 rows={4}
                 className={`${fieldClass} mt-1 resize-y`}
-                placeholder="A sentence you do not want trapped in scrollback."
+                placeholder={
+                  kind === "todo"
+                    ? "A next action you do not want trapped in scrollback."
+                    : "A sentence you do not want trapped in scrollback."
+                }
                 required
               />
+            </div>
+            <label className="block text-sm text-muted">
+              Domain
+              <select
+                value={itemDomain}
+                onChange={(event) => setItemDomain(event.target.value as Domain | "")}
+                className={`${fieldClass} mt-1`}
+                required
+              >
+                <option value="">Select a domain</option>
+                {DOMAINS.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="block text-sm text-muted">
               Attach now (optional)
               <select
-                value={thoughtProjectId}
-                onChange={(event) => setThoughtProjectId(event.target.value)}
+                value={itemProjectId}
+                onChange={(event) => {
+                  const id = event.target.value;
+                  setItemProjectId(id);
+                  const project = store.projects.find((item) => item.id === id);
+                  if (project) setItemDomain(project.domain);
+                }}
                 className={`${fieldClass} mt-1`}
               >
                 <option value="">Inbox (unsorted)</option>
@@ -115,8 +231,8 @@ export default function CapturePage() {
             <label className="block text-sm text-muted">
               Domain
               <select
-                value={domain}
-                onChange={(event) => setDomain(event.target.value as Domain)}
+                value={projectDomain}
+                onChange={(event) => setProjectDomain(event.target.value as Domain)}
                 className={`${fieldClass} mt-1`}
               >
                 {DOMAINS.map((item) => (
@@ -157,7 +273,7 @@ export default function CapturePage() {
             </label>
           </>
         )}
-        {saved ? <p className="text-sm text-active">{saved}</p> : null}
+        {error ? <p className="text-sm text-danger">{error}</p> : null}
         <button
           type="submit"
           className="rounded-full bg-focus px-4 py-2 text-sm font-medium text-bg hover:bg-focus/90"

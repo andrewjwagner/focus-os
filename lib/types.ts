@@ -23,6 +23,12 @@ export const LANE_TYPES = [
 ] as const;
 export type LaneType = (typeof LANE_TYPES)[number];
 
+export const CAPTURE_ITEM_KINDS = ["idea", "todo"] as const;
+export type CaptureItemKind = (typeof CAPTURE_ITEM_KINDS)[number];
+
+export const TRIAGE_KINDS = ["idea", "todo", "project"] as const;
+export type TriageKind = (typeof TRIAGE_KINDS)[number];
+
 export const MAX_FOCUS = 3;
 
 export type Project = {
@@ -38,9 +44,12 @@ export type Project = {
   updatedAt: string;
 };
 
+/** Captured idea or todo. Project notes reuse this shape with a projectId. */
 export type Thought = {
   id: string;
+  kind: CaptureItemKind;
   body: string;
+  domain: Domain;
   projectId: string | null;
   createdAt: string;
 };

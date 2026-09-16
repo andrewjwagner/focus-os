@@ -1,6 +1,6 @@
 # Focus OS
 
-A personal command center for projects and thoughts across work and home: active, tabled, and focus-next, including which agent/chat owns each thread.
+A personal command center for projects, ideas, and todos across work and home: active, tabled, and focus-next, including which agent/chat owns each thread.
 
 Private web dogfood for Andrew Wagner. Not a quantified-self life OS. Not a Notion clone. Not an App Store launch.
 
@@ -34,7 +34,8 @@ Open Today. You should see 3 focus-next cards, active projects grouped by domain
 
 Try:
 
-- Capture a thought (lands in inbox) or a project.
+- Capture an idea or a todo (with a domain; lands in inbox unless attached) or a project.
+- Dictate the idea/todo body in Chrome or Edge (`Dictate`). Other browsers show a short fallback hint.
 - Open a project: change status, add a lane, add a note.
 - Set as focus on a fourth project. The cap dialog asks you to demote one of the current 3.
 - Table a focus item. It leaves the focus row and shows up on Tabled.
@@ -74,7 +75,8 @@ Do not need Cursor Origin.
 
 1. Import this GitHub repo into Vercel.
 2. Set the `NEXT_PUBLIC_*` env vars (Firebase recommended on a public URL).
-3. Deploy. Add the Vercel domain to Firebase authorized domains.
+3. Optionally set server-only `TRIAGE_WEBHOOK_URL` and `TRIAGE_WEBHOOK_SECRET`.
+4. Deploy. Add the Vercel domain to Firebase authorized domains.
 
 Local IndexedDB will not follow you across machines. Wire Firebase before treating this as the daily driver on more than one device.
 
@@ -82,11 +84,48 @@ Local IndexedDB will not follow you across machines. Wire Firebase before treati
 
 1. **Today**: Focus next (hard cap 3), active by domain, inbox, tabled shelf.
 2. **Project detail**: status, domain, outcome, next action, lanes, notes. Active / Table / Done / Set as focus.
-3. **Capture**: thought or project.
+3. **Capture**: Idea, Todo, or Project. Domain on Idea and Todo. Dictate on the body field.
 4. **Tabled**: parked projects, plus inspired.
 
-Skipped on purpose: decision log, bot-helper checklist UI, mobile apps, Grok Bot API sync, team seats, AI auto-prioritization.
+## Capture to triage webhook
+
+Capture always writes to IndexedDB first. After a successful save, the browser fire-and-forgets `POST /api/capture/triage`. That route POSTs to `TRIAGE_WEBHOOK_URL` so the secret never ships to the client.
+
+Set both in `.env.local` (see `.env.example`):
+
+```
+TRIAGE_WEBHOOK_URL=
+TRIAGE_WEBHOOK_SECRET=
+```
+
+Auth header sent to the webhook (Grok Bot / Cursor automation routines expect Bearer):
+
+```
+Authorization: Bearer <TRIAGE_WEBHOOK_SECRET>
+```
+
+Payload (`version: 1`):
+
+```json
+{
+  "source": "focus-os",
+  "version": 1,
+  "kind": "idea",
+  "id": "idea-uuid",
+  "body": "the captured text",
+  "domain": "Work/Bread",
+  "projectId": null,
+  "createdAt": "2026-09-16T12:00:00.000Z",
+  "capturedAt": "2026-09-16T12:00:00.000Z"
+}
+```
+
+`kind` is `idea`, `todo`, or `project`. Projects also send `name`. If URL or secret is unset, Capture still works and the route skips quietly. Webhook failures never fail the local save.
+
+Restart `npm run dev` after changing env vars.
+
+Skipped on purpose: decision log, bot-helper checklist UI, mobile apps, Grok Bot chat sync, team seats, AI auto-prioritization.
 
 ## Seed
 
-Placeholder cards from Andrew's world (edit in the UI, not private secrets): Pocket PM Coach, Daily Drill, Bread Financial onboarding (~2026-09-28), Idea Guy tracker, Head of Growth, real estate deal-one, HYROX, Wilson School family ops, dual-role parent idea. 3 are focus-next. Inbox starts with a couple of unsorted thoughts.
+Placeholder cards from Andrew's world (edit in the UI, not private secrets): Pocket PM Coach, Daily Drill, Bread Financial onboarding (~2026-09-28), Idea Guy tracker, Head of Growth, real estate deal-one, HYROX, Wilson School family ops, dual-role parent idea. 3 are focus-next. Inbox starts with a couple of unsorted ideas and todos.

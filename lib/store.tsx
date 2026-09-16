@@ -24,7 +24,15 @@ import {
   saveProjects,
   saveThought,
 } from "./idb";
-import type { FocusCapResult, Lane, LaneType, Project, Status, Thought } from "./types";
+import type {
+  CaptureItemKind,
+  FocusCapResult,
+  Lane,
+  LaneType,
+  Project,
+  Status,
+  Thought,
+} from "./types";
 import { DOMAINS, type Domain } from "./types";
 
 type StoreState = {
@@ -39,7 +47,12 @@ type StoreState = {
     nextAction: string;
     status: Status;
   }) => Promise<Project>;
-  captureThought: (body: string, projectId: string | null) => Promise<Thought>;
+  captureThought: (input: {
+    kind: CaptureItemKind;
+    body: string;
+    domain: Domain;
+    projectId: string | null;
+  }) => Promise<Thought>;
   updateProject: (
     id: string,
     patch: Partial<Pick<Project, "name" | "domain" | "outcome" | "nextAction">>,
@@ -112,11 +125,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const captureThought = useCallback<StoreState["captureThought"]>(
-    async (body, projectId) => {
+    async (input) => {
       const thought: Thought = {
-        id: newId("thought"),
-        body: body.trim(),
-        projectId,
+        id: newId(input.kind),
+        kind: input.kind,
+        body: input.body.trim(),
+        domain: input.domain,
+        projectId: input.projectId,
         createdAt: stamp(),
       };
       setThoughts((prev) => [thought, ...prev]);
@@ -217,9 +232,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const addNote = useCallback<StoreState["addNote"]>(async (projectId, body) => {
-    await captureThought(body, projectId);
-  }, [captureThought]);
+  const addNote = useCallback<StoreState["addNote"]>(
+    async (projectId, body) => {
+      const project = projects.find((item) => item.id === projectId);
+      await captureThought({
+        kind: "idea",
+        body,
+        domain: project?.domain ?? "Ideas",
+        projectId,
+      });
+    },
+    [captureThought, projects],
+  );
 
   const removeThought = useCallback<StoreState["removeThought"]>(async (id) => {
     setThoughts((prev) => prev.filter((thought) => thought.id !== id));

@@ -225,19 +225,25 @@ export const seedLanes: Lane[] = [
 export const seedThoughts: Thought[] = [
   {
     id: "thought-bread-bot",
+    kind: "idea",
     body: "Should Bread onboarding get its own Grok bot, or stay in Head of Growth for week one?",
+    domain: "Work/Bread",
     projectId: null,
     createdAt: now,
   },
   {
     id: "thought-wilson-dates",
+    kind: "todo",
     body: "Wilson School fall conference dates need a home on the family card.",
+    domain: "Family/home",
     projectId: null,
     createdAt: now,
   },
   {
     id: "thought-drill-batch",
+    kind: "todo",
     body: "Daily Drill: batch a Judgment Sprint reminder for the week Bread starts.",
+    domain: "Pocket PM Coach",
     projectId: "proj-daily-drill",
     createdAt: now,
   },
