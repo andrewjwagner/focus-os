@@ -2,18 +2,25 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { DictateButton, appendDictation } from "@/components/DictateButton";
 import { useStore } from "@/lib/store";
-import { DOMAINS, type Domain, type Status } from "@/lib/types";
+import {
+  CAPTURE_KINDS,
+  DOMAINS,
+  type CaptureKind,
+  type Domain,
+  type Status,
+} from "@/lib/types";
 import { fieldClass } from "@/lib/ui";
 
 export default function CapturePage() {
   const store = useStore();
   const router = useRouter();
-  const [kind, setKind] = useState<"thought" | "project">("thought");
+  const [kind, setKind] = useState<CaptureKind>("idea");
   const [body, setBody] = useState("");
   const [thoughtProjectId, setThoughtProjectId] = useState("");
   const [name, setName] = useState("");
-  const [domain, setDomain] = useState<Domain>("Ideas");
+  const [domain, setDomain] = useState<Domain>("Work");
   const [outcome, setOutcome] = useState("");
   const [nextAction, setNextAction] = useState("");
   const [status, setStatus] = useState<Status>("active");
@@ -22,12 +29,12 @@ export default function CapturePage() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setSaved(null);
-    if (kind === "thought") {
+    if (kind === "idea" || kind === "todo") {
       if (!body.trim()) return;
-      await store.captureThought(body, thoughtProjectId || null);
+      await store.captureThought(body, thoughtProjectId || null, kind);
       setBody("");
       setThoughtProjectId("");
-      setSaved("Thought captured.");
+      setSaved(kind === "todo" ? "Todo captured." : "Idea captured.");
       router.push("/");
       return;
     }
@@ -48,38 +55,49 @@ export default function CapturePage() {
         <p className="text-xs uppercase tracking-[0.2em] text-focus">Capture</p>
         <h1 className="mt-2 font-display text-4xl text-ink">Get it out of chat.</h1>
         <p className="mt-2 text-sm leading-6 text-muted">
-          Fast add a thought or a project. Web is enough for dogfood.
+          Fast add an idea, a todo, or a project. Web is enough for dogfood.
         </p>
       </section>
 
-      <div className="flex gap-2">
-        {(["thought", "project"] as const).map((option) => (
+      <div className="flex flex-wrap gap-2">
+        {CAPTURE_KINDS.map((option) => (
           <button
             key={option}
             type="button"
             onClick={() => setKind(option)}
-            className={`rounded-full px-4 py-1.5 text-sm ${
+            className={`rounded-full px-4 py-1.5 text-sm capitalize ${
               kind === option
                 ? "bg-focus text-bg"
                 : "border border-line text-muted"
             }`}
           >
-            {option === "thought" ? "Thought" : "Project"}
+            {option}
           </button>
         ))}
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4 rounded-2xl border border-line bg-card p-5">
-        {kind === "thought" ? (
+        {kind === "idea" || kind === "todo" ? (
           <>
             <label className="block text-sm text-muted">
-              Thought
+              <span className="flex items-center justify-between gap-2">
+                <span>{kind === "todo" ? "Todo" : "Idea"}</span>
+                <DictateButton
+                  onTranscript={(piece) =>
+                    setBody((current) => appendDictation(current, piece))
+                  }
+                />
+              </span>
               <textarea
                 value={body}
                 onChange={(event) => setBody(event.target.value)}
                 rows={4}
                 className={`${fieldClass} mt-1 resize-y`}
-                placeholder="A sentence you do not want trapped in scrollback."
+                placeholder={
+                  kind === "todo"
+                    ? "A next action you do not want trapped in scrollback."
+                    : "A sentence you do not want trapped in scrollback."
+                }
                 required
               />
             </label>
@@ -104,7 +122,14 @@ export default function CapturePage() {
         ) : (
           <>
             <label className="block text-sm text-muted">
-              Name
+              <span className="flex items-center justify-between gap-2">
+                <span>Name</span>
+                <DictateButton
+                  onTranscript={(piece) =>
+                    setName((current) => appendDictation(current, piece))
+                  }
+                />
+              </span>
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}

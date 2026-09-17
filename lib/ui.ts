@@ -1,13 +1,13 @@
 import type { Domain, Status } from "@/lib/types";
 
 export const DOMAIN_TINT: Record<Domain, string> = {
-  "Work/Bread": "var(--tint-work)",
-  "Pocket PM Coach": "var(--tint-ppc)",
-  "Family/home": "var(--tint-family)",
-  "Real estate": "var(--tint-re)",
+  Work: "var(--tint-work)",
+  "Side project": "var(--tint-side)",
+  Home: "var(--tint-home)",
   Health: "var(--tint-health)",
-  Ideas: "var(--tint-ideas)",
+  Finance: "var(--tint-finance)",
   Career: "var(--tint-career)",
+  Ideas: "var(--tint-ideas)",
 };
 
 export function statusLabel(status: Status): string {

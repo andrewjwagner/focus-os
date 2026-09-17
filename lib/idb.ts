@@ -1,5 +1,6 @@
 import { DB_NAME, DB_VERSION } from "./constants";
 import { seedLanes, seedProjects, seedThoughts } from "./seed";
+import { coerceThoughtKind } from "./triage";
 import type { Lane, Project, Thought } from "./types";
 
 type StoreName = "projects" | "thoughts" | "lanes" | "meta";
@@ -89,11 +90,15 @@ export async function loadSnapshot(): Promise<{
     await put("meta", { key: "seeded", value: "v1" });
   }
 
-  const [projects, thoughts, lanes] = await Promise.all([
+  const [projects, rawThoughts, lanes] = await Promise.all([
     getAll<Project>("projects"),
     getAll<Thought>("thoughts"),
     getAll<Lane>("lanes"),
   ]);
+  const thoughts = rawThoughts.map((thought) => ({
+    ...thought,
+    kind: coerceThoughtKind(thought.kind),
+  }));
   return { projects, thoughts, lanes };
 }
 

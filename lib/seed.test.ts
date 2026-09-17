@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { inboxThoughts, seedLanes, seedProjects, seedThoughts } from "./seed";
+import { DOMAINS } from "./types";
 import { focusedProjects } from "./focus";
+
+const PRIVATE_LIFE = /Bread|Pocket PM|Wilson|HYROX|deal-one|Macy|andrew\.wagner|Wyomissing|Idea Guy|Head of Growth/i;
 
 describe("seed data", () => {
   it("has 8 to 12 projects with mixed statuses", () => {
@@ -22,5 +25,12 @@ describe("seed data", () => {
       true,
     );
     expect(seedLanes.length).toBeGreaterThan(0);
+  });
+
+  it("uses generic demo copy, not private life details", () => {
+    const blob = JSON.stringify({ seedProjects, seedLanes, seedThoughts, DOMAINS });
+    expect(blob).not.toMatch(PRIVATE_LIFE);
+    expect(DOMAINS).toContain("Work");
+    expect(DOMAINS).not.toContain("Work/Bread");
   });
 });

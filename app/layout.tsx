@@ -22,7 +22,7 @@ const instrument = Instrument_Serif({
 export const metadata: Metadata = {
   title: "Focus OS",
   description:
-    "A personal command center for projects and thoughts across work and home: active, tabled, and focus-next, including which agent/chat owns each thread.",
+    "A personal command center for projects and thoughts across work and home: active, tabled, and focus-next, including which agent or chat owns each thread.",
 };
 
 export default function RootLayout({

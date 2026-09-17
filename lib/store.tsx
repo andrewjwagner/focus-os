@@ -24,7 +24,21 @@ import {
   saveProjects,
   saveThought,
 } from "./idb";
-import type { FocusCapResult, Lane, LaneType, Project, Status, Thought } from "./types";
+import {
+  coerceDomain,
+  coerceThoughtKind,
+  notifyLocalCapture,
+  type QueuedTriage,
+} from "./triage";
+import type {
+  FocusCapResult,
+  Lane,
+  LaneType,
+  Project,
+  Status,
+  Thought,
+  ThoughtKind,
+} from "./types";
 import { DOMAINS, type Domain } from "./types";
 
 type StoreState = {
@@ -39,7 +53,11 @@ type StoreState = {
     nextAction: string;
     status: Status;
   }) => Promise<Project>;
-  captureThought: (body: string, projectId: string | null) => Promise<Thought>;
+  captureThought: (
+    body: string,
+    projectId: string | null,
+    kind?: ThoughtKind,
+  ) => Promise<Thought>;
   updateProject: (
     id: string,
     patch: Partial<Pick<Project, "name" | "domain" | "outcome" | "nextAction">>,
@@ -70,6 +88,32 @@ function newId(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
 }
 
+function projectFromTriage(item: QueuedTriage): Project {
+  const now = stamp();
+  return {
+    id: item.id,
+    name: (item.name ?? "Untitled").trim(),
+    domain: coerceDomain(item.domain),
+    status: "active",
+    outcome: item.outcome?.trim() ?? "",
+    nextAction: item.nextAction?.trim() ?? "",
+    focusNext: false,
+    focusOrder: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function thoughtFromTriage(item: QueuedTriage): Thought {
+  return {
+    id: item.id,
+    body: (item.body ?? "").trim(),
+    projectId: item.projectId ?? null,
+    kind: coerceThoughtKind(item.kind),
+    createdAt: item.receivedAt,
+  };
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -78,13 +122,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    void loadSnapshot().then((snap) => {
+    void (async () => {
+      const snap = await loadSnapshot();
       if (cancelled) return;
-      setProjects(snap.projects);
-      setThoughts(snap.thoughts);
+      let nextProjects = snap.projects;
+      let nextThoughts = snap.thoughts;
+      try {
+        const response = await fetch("/api/triage");
+        if (response.ok) {
+          const data = (await response.json()) as { items?: QueuedTriage[] };
+          for (const item of data.items ?? []) {
+            if (item.kind === "project") {
+              const project = projectFromTriage(item);
+              await saveProject(project);
+              nextProjects = [...nextProjects, project];
+            } else {
+              const thought = thoughtFromTriage(item);
+              if (!thought.body) continue;
+              await saveThought(thought);
+              nextThoughts = [thought, ...nextThoughts];
+            }
+          }
+        }
+      } catch {
+        // Local ingest is optional.
+      }
+      if (cancelled) return;
+      setProjects(nextProjects);
+      setThoughts(nextThoughts);
       setLanes(snap.lanes);
       setReady(true);
-    });
+    })();
     return () => {
       cancelled = true;
     };
@@ -106,21 +174,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       };
       setProjects((prev) => [...prev, project]);
       await saveProject(project);
+      void notifyLocalCapture({
+        kind: "project",
+        name: project.name,
+        domain: project.domain,
+        outcome: project.outcome,
+        nextAction: project.nextAction,
+      });
       return project;
     },
     [],
   );
 
   const captureThought = useCallback<StoreState["captureThought"]>(
-    async (body, projectId) => {
+    async (body, projectId, kind = "idea") => {
       const thought: Thought = {
         id: newId("thought"),
         body: body.trim(),
         projectId,
+        kind,
         createdAt: stamp(),
       };
       setThoughts((prev) => [thought, ...prev]);
       await saveThought(thought);
+      void notifyLocalCapture({
+        kind,
+        body: thought.body,
+        projectId: thought.projectId,
+      });
       return thought;
     },
     [],
@@ -218,7 +299,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const addNote = useCallback<StoreState["addNote"]>(async (projectId, body) => {
-    await captureThought(body, projectId);
+    await captureThought(body, projectId, "idea");
   }, [captureThought]);
 
   const removeThought = useCallback<StoreState["removeThought"]>(async (id) => {

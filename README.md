@@ -1,10 +1,12 @@
 # Focus OS
 
-A personal command center for projects and thoughts across work and home: active, tabled, and focus-next, including which agent/chat owns each thread.
+A personal command center for projects and thoughts across work and home: active, tabled, and focus-next, including which agent or chat owns each thread.
 
-Private web dogfood for Andrew Wagner. Not a quantified-self life OS. Not a Notion clone. Not an App Store launch.
+Open source. Local-first. Not a quantified-self life OS, a Notion clone, or a team tool.
 
-## Run locally
+Source: [github.com/andrewjwagner/focus-os](https://github.com/andrewjwagner/focus-os)
+
+## Quick start
 
 Requires Node 20+.
 
@@ -19,8 +21,8 @@ Open [http://localhost:3000](http://localhost:3000).
 Local mode (no Firebase env vars):
 
 1. The sign-in screen says Firebase is not configured.
-2. Enter `andrew.wagner179@gmail.com` and continue.
-3. Seed data loads into IndexedDB in this browser.
+2. Enter any email and continue. Set `NEXT_PUBLIC_ALLOWED_EMAIL` if you want to lock it to one address.
+3. Demo seed data loads into IndexedDB in this browser.
 
 ```bash
 npm test
@@ -28,30 +30,42 @@ npm run lint
 npm run build
 ```
 
-## Dogfood
+## Optional env
 
-Open Today. You should see 3 focus-next cards, active projects grouped by domain (collapsed), an inbox count, and a collapsed tabled shelf.
+Copy `.env.example` to `.env.local`. Nothing in that file is required to run locally.
 
-Try:
+```
+# Empty = any non-empty email can sign in locally.
+NEXT_PUBLIC_ALLOWED_EMAIL=
 
-- Capture a thought (lands in inbox) or a project.
-- Open a project: change status, add a lane, add a note.
-- Set as focus on a fourth project. The cap dialog asks you to demote one of the current 3.
-- Table a focus item. It leaves the focus row and shows up on Tabled.
+# Inbound ingest. POST /api/triage with header x-triage-secret.
+TRIAGE_WEBHOOK_SECRET=
 
-Data lives in this browser until Firebase is wired. To reset seed data, DevTools > Application > IndexedDB > `focus-os` > Delete database, then refresh.
+# Outbound fan-out for captures made in the UI. Leave blank to skip.
+TRIAGE_WEBHOOK_URL=
+```
 
-## Auth (Andrew-only)
+### Allowlist
 
-Allowed email defaults to `andrew.wagner179@gmail.com` (`NEXT_PUBLIC_ALLOWED_EMAIL`).
+`NEXT_PUBLIC_ALLOWED_EMAIL` is optional. Empty (the default) means any non-empty email works in local mode. Set it to a single address to gate sign-in to that email (local stub and Firebase Google sign-in).
 
-**Local stub (this PR default):** email gate only. TODO: add Firebase config below so production is Google sign-in, not a typed email.
+### Triage webhook
 
-**Firebase Auth (when env is set):** Google sign-in. Anyone else is rejected, including unverified emails.
+`POST /api/triage` accepts JSON:
 
-## Firebase later
+```json
+{ "kind": "idea", "body": "Ship the demo seed" }
+```
 
-This MVP prefers a working UI over blocked infra. IndexedDB is the store. Auth can use Firebase Google sign-in when these are set in `.env.local`:
+Kinds: `idea`, `todo`, `project`. Ideas and todos need `body`. Projects need `name` (and may include `domain`, `outcome`, `nextAction`).
+
+Send `x-triage-secret: $TRIAGE_WEBHOOK_SECRET` or `Authorization: Bearer $TRIAGE_WEBHOOK_SECRET`. Refresh the app and queued items land in the inbox, or as a project card.
+
+If `TRIAGE_WEBHOOK_URL` is set, captures from the UI are also POSTed there with the same secret header. Point it at another tool, not back at this app, or the forward is skipped.
+
+### Firebase (optional)
+
+IndexedDB is the store. Auth can use Google sign-in when these are set in `.env.local`:
 
 ```
 NEXT_PUBLIC_FIREBASE_API_KEY=
@@ -62,18 +76,25 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
 ```
 
-Then enable Google sign-in in Firebase Auth, add `localhost` as an authorized domain, and keep the allowlist email as Andrew's.
+Enable Google sign-in in Firebase Auth and add `localhost` as an authorized domain. If `NEXT_PUBLIC_ALLOWED_EMAIL` is set, every other account is rejected, including unverified emails. If it is empty, any verified Google account can sign in.
 
-`firestore.rules` is Andrew-only (`email` + `email_verified`) for a future `users/{uid}/...` tree. Deploy with `npx -y firebase-tools@latest deploy --only firestore:rules` after `firebase use <project-id>`. Do not deploy until a real project exists.
+`firestore.rules` scopes a future `users/{uid}/...` tree to the signed-in user. Deploy with `npx -y firebase-tools@latest deploy --only firestore:rules` after `firebase use <project-id>`. Do not deploy until a real project exists.
 
-Suggested reuse: Pocket PM Coach's Firebase project (`product-power-up`) or a new private `focus-os` project. Either works. Ask before creating one.
+## Try it
+
+Open Today. You should see 3 focus-next cards, active projects grouped by domain (collapsed), an inbox count, and a collapsed tabled shelf.
+
+- Capture an idea or todo (lands in inbox) or a project (pick a domain). Dictate is on the capture form when the browser supports it.
+- Open a project: change status, add a lane, add a note.
+- Set as focus on a fourth project. The cap dialog asks you to demote one of the current 3.
+- Table a focus item. It leaves the focus row and shows up on Tabled.
+
+Data lives in this browser until Firebase is wired. To reset seed data, DevTools > Application > IndexedDB > `focus-os` > Delete database, then refresh.
 
 ## Optional Vercel
 
-Do not need Cursor Origin.
-
 1. Import this GitHub repo into Vercel.
-2. Set the `NEXT_PUBLIC_*` env vars (Firebase recommended on a public URL).
+2. Set env vars you need (`NEXT_PUBLIC_ALLOWED_EMAIL`, triage, and Firebase recommended on a public URL).
 3. Deploy. Add the Vercel domain to Firebase authorized domains.
 
 Local IndexedDB will not follow you across machines. Wire Firebase before treating this as the daily driver on more than one device.
@@ -82,11 +103,15 @@ Local IndexedDB will not follow you across machines. Wire Firebase before treati
 
 1. **Today**: Focus next (hard cap 3), active by domain, inbox, tabled shelf.
 2. **Project detail**: status, domain, outcome, next action, lanes, notes. Active / Table / Done / Set as focus.
-3. **Capture**: thought or project.
+3. **Capture**: Idea, Todo, or Project, with domain on projects, plus Dictate.
 4. **Tabled**: parked projects, plus inspired.
 
 Skipped on purpose: decision log, bot-helper checklist UI, mobile apps, Grok Bot API sync, team seats, AI auto-prioritization.
 
 ## Seed
 
-Placeholder cards from Andrew's world (edit in the UI, not private secrets): Pocket PM Coach, Daily Drill, Bread Financial onboarding (~2026-09-28), Idea Guy tracker, Head of Growth, real estate deal-one, HYROX, Wilson School family ops, dual-role parent idea. 3 are focus-next. Inbox starts with a couple of unsorted thoughts.
+Generic demo cards so a clone is useful on first run: a new-role onboarding, a side project, a growth loop, an idea queue, writing cadence, household ops, a training block, a parked finance thesis, a previous-role wrap, and an inspired experiment. 3 are focus-next. Inbox starts with a couple of unsorted items.
+
+## License
+
+MIT. Copyright 2026 Andrew Wagner.

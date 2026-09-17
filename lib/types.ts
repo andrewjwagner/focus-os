@@ -1,13 +1,12 @@
 export const DOMAINS = [
-  "Work/Bread",
-  "Pocket PM Coach",
-  "Family/home",
-  "Real estate",
+  "Work",
+  "Side project",
+  "Home",
   "Health",
-  "Ideas",
+  "Finance",
   "Career",
+  "Ideas",
 ] as const;
-
 export type Domain = (typeof DOMAINS)[number];
 
 export const STATUSES = ["active", "tabled", "done", "inspired"] as const;
@@ -22,6 +21,12 @@ export const LANE_TYPES = [
   "Other",
 ] as const;
 export type LaneType = (typeof LANE_TYPES)[number];
+
+export const THOUGHT_KINDS = ["idea", "todo"] as const;
+export type ThoughtKind = (typeof THOUGHT_KINDS)[number];
+
+export const CAPTURE_KINDS = ["idea", "todo", "project"] as const;
+export type CaptureKind = (typeof CAPTURE_KINDS)[number];
 
 export const MAX_FOCUS = 3;
 
@@ -42,6 +47,7 @@ export type Thought = {
   id: string;
   body: string;
   projectId: string | null;
+  kind: ThoughtKind;
   createdAt: string;
 };
 
