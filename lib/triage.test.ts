@@ -24,7 +24,7 @@ describe("triage payload", () => {
       kind: "idea",
       id: thought.id,
       body: thought.body,
-      domain: "Work/Bread",
+      domain: thought.domain,
       projectId: null,
       createdAt: thought.createdAt,
       capturedAt: thought.createdAt,

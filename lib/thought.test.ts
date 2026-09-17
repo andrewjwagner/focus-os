@@ -39,10 +39,10 @@ describe("normalizeThought", () => {
         projectId: "proj-daily-drill",
         createdAt: "2026-09-16T12:00:00.000Z",
       },
-      { "proj-daily-drill": "Pocket PM Coach" },
+      { "proj-daily-drill": "Side project" },
     );
     expect(thought?.kind).toBe("idea");
-    expect(thought?.domain).toBe("Pocket PM Coach");
+    expect(thought?.domain).toBe("Side project");
   });
 
   it("keeps an already migrated idea or todo", () => {
@@ -50,7 +50,7 @@ describe("normalizeThought", () => {
       id: "todo-1",
       kind: "todo",
       body: "Call the school.",
-      domain: "Family/home",
+      domain: "Home",
       projectId: null,
       createdAt: "2026-09-16T12:00:00.000Z",
     };

@@ -1,10 +1,10 @@
 import type { Domain, Status } from "@/lib/types";
 
 export const DOMAIN_TINT: Record<Domain, string> = {
-  "Work/Bread": "var(--tint-work)",
-  "Pocket PM Coach": "var(--tint-ppc)",
-  "Family/home": "var(--tint-family)",
-  "Real estate": "var(--tint-re)",
+  "Work": "var(--tint-work)",
+  "Side project": "var(--tint-ppc)",
+  "Home": "var(--tint-family)",
+  "Finance": "var(--tint-re)",
   Health: "var(--tint-health)",
   Ideas: "var(--tint-ideas)",
   Career: "var(--tint-career)",

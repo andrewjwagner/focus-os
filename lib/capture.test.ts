@@ -23,7 +23,7 @@ describe("validateCapture", () => {
       validateCapture({
         kind: "todo",
         body: "Call school",
-        domain: "Family/home",
+        domain: "Home",
         projectId: null,
       }),
     ).toEqual({ ok: true });
@@ -43,8 +43,8 @@ describe("validateCapture", () => {
     expect(
       validateCapture({
         kind: "project",
-        name: "Bread onboarding",
-        domain: "Work/Bread",
+        name: "Role onboarding",
+        domain: "Work",
         outcome: "Land cleanly",
         nextAction: "Map 30 days",
         status: "active",
