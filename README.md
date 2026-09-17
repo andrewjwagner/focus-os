@@ -4,14 +4,14 @@ A personal command center for projects and thoughts across work and home: active
 
 Local-first open source. Not a quantified-self life OS. Not a Notion clone.
 
-**Repo:** [github.com/focus-os](https://github.com/andrewjwagner/focus-os)
+**Repo:** [github.com/andrewjwagner/focus-os](https://github.com/andrewjwagner/focus-os)
 
 ## Quick start
 
 Requires Node 20+.
 
 ```bash
-git clone https://github.com/focus-os.git
+git clone https://github.com/andrewjwagner/focus-os.git
 cd focus-os
 npm install
 cp .env.example .env.local
