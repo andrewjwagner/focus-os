@@ -26,14 +26,15 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen items-center justify-center px-6">
       <div className="w-full max-w-md rounded-2xl border border-line bg-card p-8 shadow-xl">
         <p className="text-xs uppercase tracking-[0.2em] text-focus">Focus OS</p>
-        <h1 className="mt-3 font-display text-3xl text-ink">Private command center</h1>
+        <h1 className="mt-3 font-display text-3xl text-ink">Your command center</h1>
         <p className="mt-3 text-sm leading-6 text-muted">
-          Andrew-only dogfood. Not a life dashboard, Notion clone, or team tool.
+          Local-first command center for projects and thoughts. Not a life dashboard, Notion clone, or team tool.
         </p>
 
         {auth.unauthorized ? (
           <p className="mt-4 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
-            This app is private. Signed-in email must be {auth.allowed}.
+            That email is not on the allowlist
+            {auth.allowed ? ` (${auth.allowed})` : ""}.
           </p>
         ) : null}
         {auth.error ? (

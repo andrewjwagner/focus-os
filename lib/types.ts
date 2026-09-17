@@ -1,9 +1,9 @@
 export const DOMAINS = [
-  "Work/Bread",
-  "Pocket PM Coach",
-  "Family/home",
-  "Real estate",
+  "Work",
+  "Side project",
+  "Home",
   "Health",
+  "Finance",
   "Ideas",
   "Career",
 ] as const;
