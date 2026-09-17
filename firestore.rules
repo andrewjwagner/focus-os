@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAndrew() {
+      return request.auth != null
+        && request.auth.token.email == 'andrew.wagner179@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    match /users/{userId}/{document=**} {
+      allow read, write: if isAndrew()
+        && request.auth.uid == userId
+        && request.auth.token.email.size() < 320;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
