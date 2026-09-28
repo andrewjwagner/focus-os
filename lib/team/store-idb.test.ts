@@ -7,6 +7,9 @@ import { DEMO_MOMENTS, DEMO_NOTES, DEMO_PEOPLE, demoItems } from "./seed";
 import {
   deletePersonCascade,
   loadTeamData,
+  saveCoaching,
+  saveDerived,
+  savePulses,
   saveItems,
   saveMoment,
   saveNotes,
@@ -69,14 +72,45 @@ beforeEach(async () => {
   await deleteDb();
 });
 
-describe("IndexedDB v3 migration", () => {
-  it("bumps to v3, adds Team stores, and keeps existing data", async () => {
+/** Build a v3 database (first Team release) with a configured person. */
+function createV3WithPerson(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 3);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      for (const name of ["projects", "thoughts", "lanes", "teamPeople", "teamNotes", "teamItems", "teamMoments"]) {
+        db.createObjectStore(name, { keyPath: "id" });
+      }
+      db.createObjectStore("meta", { keyPath: "key" }).put({ key: "seeded", value: "v1" });
+      request.transaction!.objectStore("teamPeople").put({ ...DEMO_PEOPLE[0] });
+      request.transaction!.objectStore("projects").put({ id: "proj-keep", name: "Keep me" });
+    };
+    request.onsuccess = () => {
+      request.result.close();
+      resolve();
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+describe("IndexedDB migrations", () => {
+  it("v2 to v4: adds Team stores and keeps existing data", async () => {
     await createV2WithData();
     const snap = await loadSnapshot();
-    expect(DB_VERSION).toBe(3);
+    expect(DB_VERSION).toBe(4);
     expect(snap.projects.map((project) => project.id)).toEqual(["proj-keep"]);
     expect(snap.thoughts.map((thought) => thought.body)).toEqual(["Keep this thought"]);
     for (const store of TEAM_STORES) {
+      expect(await getAll(store)).toEqual([]);
+    }
+  });
+
+  it("v3 to v4: adds pulse, coaching, and derived stores and keeps people", async () => {
+    await createV3WithPerson();
+    const snap = await loadSnapshot();
+    expect(snap.projects.map((project) => project.id)).toEqual(["proj-keep"]);
+    expect(await getAll("teamPeople")).toHaveLength(1);
+    for (const store of ["teamPulse", "teamCoaching", "teamDerived"] as const) {
       expect(await getAll(store)).toEqual([]);
     }
   });
@@ -119,5 +153,38 @@ describe("encrypted Team storage", () => {
     data = await loadTeamData(key);
     expect(data.notes.every((note) => note.personId === "person-demo-sam")).toBe(true);
     expect(await getAll("teamPeople")).toHaveLength(1);
+  });
+
+  it("encrypts pulse ratings, coaching items, and AI results, and cascades deletes", async () => {
+    const { key } = await createVault("correct horse battery", 1000);
+    const personId = DEMO_PEOPLE[0].id;
+    await savePulses(key, [
+      {
+        id: "pulse-1",
+        personId,
+        date: "2026-03-01",
+        scores: { engagement: 7, workload: 4, growth: 6, relationship: 8, delivery: 7 },
+        createdAt: "",
+      },
+    ]);
+    await saveCoaching(key, [
+      { id: "coach-1", personId, text: "Practice crisp status updates", done: false, source: "manual", createdAt: "" },
+    ]);
+    await saveDerived(key, [
+      { id: "recap:n1", kind: "recap", noteId: "n1", personId, text: "Secret recap body" },
+    ]);
+    const raw = JSON.stringify([await getAll("teamPulse"), await getAll("teamCoaching"), await getAll("teamDerived")]);
+    expect(raw).not.toContain("crisp status");
+    expect(raw).not.toContain("Secret recap");
+    expect(raw).not.toContain("workload");
+
+    const data = await loadTeamData(key);
+    expect(data.pulses[0].scores.workload).toBe(4);
+    expect(data.coaching[0].text).toBe("Practice crisp status updates");
+    expect(data.derived[0]).toMatchObject({ kind: "recap", text: "Secret recap body" });
+
+    await deletePersonCascade(personId);
+    const after = await loadTeamData(key);
+    expect([after.pulses.length, after.coaching.length, after.derived.length]).toEqual([0, 0, 0]);
   });
 });

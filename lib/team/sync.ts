@@ -1,6 +1,52 @@
-import { extractItems, toActionItem } from "./extract";
-import { identityFor } from "./owner";
-import type { ActionItem, Person, TeamNote } from "./types";
+import { extractItems, itemId, parseDue, toActionItem } from "./extract";
+import { identityFor, resolveOwner, type Identity } from "./owner";
+import type { ActionItem, CachedAnalysis, NoteAnalysis, Person, TeamNote } from "./types";
+
+/** Action items from a cached AI analysis, with owners mapped to kinds. */
+export function itemsFromAnalysis(
+  note: TeamNote,
+  analysis: NoteAnalysis,
+  identity: Identity,
+): ActionItem[] {
+  const seen = new Set<string>();
+  const items: ActionItem[] = [];
+  for (const entry of analysis.items) {
+    const id = itemId(note.id, entry.text);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    let ownerKind: ActionItem["ownerKind"] = "unassigned";
+    let owner = "";
+    if (entry.owner === "me") {
+      ownerKind = "me";
+      owner = "me";
+    } else if (entry.owner === "them") {
+      ownerKind = "them";
+      owner = identity.person.name;
+    } else if (entry.owner === "other" && entry.ownerName) {
+      // The model may name someone we know (even me or them): resolve it.
+      const resolved = resolveOwner(entry.ownerName, identity);
+      ownerKind = resolved.kind === "unassigned" ? "other" : resolved.kind;
+      owner = resolved.kind === "unassigned" ? entry.ownerName : resolved.name;
+    }
+    const reference = new Date(note.meetingAt);
+    items.push({
+      id,
+      personId: note.personId,
+      noteId: note.id,
+      text: entry.text,
+      detail: "",
+      ownerKind,
+      owner,
+      ownerHint: entry.ownerName ?? entry.owner,
+      ownerEdited: false,
+      edited: false,
+      due: entry.due ?? (Number.isNaN(reference.getTime()) ? null : parseDue(entry.text, reference)),
+      done: false,
+      createdAt: note.meetingAt,
+    });
+  }
+  return items;
+}
 
 /** Client-side sync helpers (pure). The fetch itself lives in the Team provider. */
 
@@ -103,6 +149,8 @@ export function deriveItems(input: {
   items: ActionItem[];
   people: Person[];
   selfName: string;
+  /** Cached AI analyses by note id. When present (and current) they replace rule parsing. */
+  analyses?: Record<string, CachedAnalysis | undefined>;
 }): { upserts: ActionItem[]; deletes: string[] } {
   const byPerson = new Map(input.people.map((person) => [person.id, person]));
   const existing = new Map(input.items.map((item) => [item.id, item]));
@@ -121,8 +169,12 @@ export function deriveItems(input: {
       noteOwnerName: note.ownerName,
       noteOwnerEmail: note.ownerEmail,
     });
-    for (const extracted of extractItems(note)) {
-      const fresh = toActionItem(extracted, identity);
+    const cached = input.analyses?.[note.id];
+    const freshItems =
+      cached && cached.noteUpdatedAt === note.updatedAt
+        ? itemsFromAnalysis(note, cached.analysis, identity)
+        : extractItems(note).map((extracted) => toActionItem(extracted, identity));
+    for (const fresh of freshItems) {
       keep.add(fresh.id);
       const prior = existing.get(fresh.id);
       if (!prior) {

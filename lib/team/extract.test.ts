@@ -281,8 +281,8 @@ describe("themes and prep brief", () => {
     };
     const items = notes.flatMap((entry) => extractActionItems(entry, identity));
     const moments: Moment[] = [
-      { id: "m1", personId: "p1", date: "2026-03-10", text: "Great demo", tag: "win", createdAt: "" },
-      { id: "m2", personId: "p1", date: "2026-03-01", text: "Old", tag: "", createdAt: "" },
+      { id: "m1", personId: "p1", date: "2026-03-10", text: "Great demo", tag: "win", type: "win", typeEdited: false, createdAt: "" },
+      { id: "m2", personId: "p1", date: "2026-03-01", text: "Old", tag: "", type: "note", typeEdited: false, createdAt: "" },
     ];
     const brief = buildPrepBrief({ notes, items, moments });
     expect(brief.lastNote?.id).toBe("b");

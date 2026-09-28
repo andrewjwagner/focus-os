@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { TeamGate } from "@/components/team/TeamGate";
 import { TeamNav } from "@/components/team/TeamNav";
+import { AI_LABELS } from "@/lib/team/ai-client";
 import { useTeam } from "@/lib/team/context";
 import { TEAM_ROLES, type Person, type TeamRole } from "@/lib/team/types";
 import { roleLabel } from "@/lib/team/view";
@@ -183,6 +184,36 @@ function TeamSettings() {
         <div className="mt-4">
           <TeamNav />
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-line bg-bg-elev p-4" aria-label="AI provider">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-medium text-ink">
+            AI: <span data-testid="ai-provider">{AI_LABELS[team.ai.provider]}</span>
+            {team.ai.model ? <span className="ml-2 text-xs text-muted">{team.ai.model}</span> : null}
+          </h2>
+          {team.ai.provider !== "off" ? (
+            <button
+              type="button"
+              onClick={() => void team.analyzeNotes()}
+              disabled={team.aiBusy}
+              className="rounded-full border border-line px-3 py-1 text-xs text-muted hover:text-ink disabled:opacity-50"
+            >
+              {team.aiBusy ? "Analyzing..." : "Analyze new notes"}
+            </button>
+          ) : null}
+        </div>
+        <p className="mt-1 text-xs leading-5 text-muted">
+          {team.ai.provider === "off"
+            ? "No AI configured. Rules handle extraction, talking points, and recaps. Set OLLAMA_MODEL, XAI_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY in .env.local to turn it on."
+            : team.ai.provider === "ollama"
+              ? team.ai.health === "unreachable"
+                ? "Ollama is not reachable. Start it with `ollama serve` (or open the Ollama app). Rules are used until then."
+                : team.ai.health === "model_missing"
+                  ? `Model not pulled yet. Run \`ollama pull ${team.ai.model}\`. Rules are used until then.`
+                  : "Runs on this machine through Ollama. Note text does not leave your computer."
+              : "Sends each note's summary (not the transcript, unless the summary is empty) to the provider. Results are cached encrypted in this browser."}
+        </p>
       </section>
 
       <section className="rounded-2xl border border-line bg-bg-elev p-4">

@@ -53,7 +53,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-3xl px-5 py-8">{children}</main>
+      <main
+        className={`mx-auto px-5 py-8 ${/^\/team\/(?!settings|digest)[^/]+/.test(pathname) ? "max-w-5xl" : "max-w-3xl"}`}
+      >
+        {children}
+      </main>
       <footer className="mx-auto max-w-3xl px-5 pb-10 text-xs text-muted">
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-4">
           <span>

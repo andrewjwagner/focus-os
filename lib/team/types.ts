@@ -63,6 +63,9 @@ export type ActionItem = {
   createdAt: string;
 };
 
+export const MOMENT_TYPES = ["win", "issue", "coaching", "note"] as const;
+export type MomentType = (typeof MOMENT_TYPES)[number];
+
 export type Moment = {
   id: string;
   personId: string;
@@ -70,7 +73,70 @@ export type Moment = {
   date: string;
   text: string;
   tag: string;
+  type: MomentType;
+  /** True once the user picked the type by hand. */
+  typeEdited: boolean;
   createdAt: string;
+};
+
+export const PULSE_AXES = ["engagement", "workload", "growth", "relationship", "delivery"] as const;
+export type PulseAxis = (typeof PULSE_AXES)[number];
+export type PulseScores = Record<PulseAxis, number>;
+
+/** Manual 1 to 10 rating entered after a 1:1. Stored encrypted. */
+export type PulseRating = {
+  id: string;
+  personId: string;
+  /** YYYY-MM-DD */
+  date: string;
+  scores: PulseScores;
+  createdAt: string;
+};
+
+export const TOPIC_CATEGORIES = ["tactical", "nurture"] as const;
+export type TopicCategory = (typeof TOPIC_CATEGORIES)[number];
+
+export type Topic = { text: string; category: TopicCategory; noteId: string; meetingAt: string };
+
+export type CoachingItem = {
+  id: string;
+  personId: string;
+  text: string;
+  done: boolean;
+  source: "ai" | "rules" | "manual";
+  createdAt: string;
+};
+
+export type AiProviderName = "ollama" | "xai" | "anthropic" | "openai" | "off";
+
+/** Structured result of one AI pass over a note. Cached per note id + updatedAt. */
+export type NoteAnalysis = {
+  summary: string;
+  items: {
+    text: string;
+    owner: "me" | "them" | "other" | "unclear";
+    ownerName: string | null;
+    due: string | null;
+  }[];
+  topics: { text: string; category: TopicCategory }[];
+  highlights: { text: string; type: "win" | "issue" | "coaching" }[];
+  themes: string[];
+  recap: string;
+};
+
+export type CachedAnalysis = {
+  noteId: string;
+  personId: string;
+  noteUpdatedAt: string;
+  provider: AiProviderName;
+  analysis: NoteAnalysis;
+};
+
+export type TalkingPoints = {
+  personId: string;
+  points: string[];
+  generatedAt: string;
+  provider: AiProviderName | "rules";
 };
 
 export type Theme = { label: string; count: number };

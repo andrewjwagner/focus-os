@@ -15,11 +15,22 @@ export type StoreName =
   | "teamPeople"
   | "teamNotes"
   | "teamItems"
-  | "teamMoments";
+  | "teamMoments"
+  | "teamPulse"
+  | "teamCoaching"
+  | "teamDerived";
 
 type Meta = { key: string; value: string };
 
-export const TEAM_STORES = ["teamPeople", "teamNotes", "teamItems", "teamMoments"] as const;
+export const TEAM_STORES = [
+  "teamPeople",
+  "teamNotes",
+  "teamItems",
+  "teamMoments",
+  "teamPulse",
+  "teamCoaching",
+  "teamDerived",
+] as const;
 
 /**
  * Additive schema upgrades only, so existing projects, thoughts, lanes, and meta
@@ -27,6 +38,7 @@ export const TEAM_STORES = ["teamPeople", "teamNotes", "teamItems", "teamMoments
  * v1: projects, thoughts, lanes, meta.
  * v2: thought records gain kind + domain in loadSnapshot (no new stores).
  * v3: Team tab stores (people, encrypted notes, action items, encrypted moments).
+ * v4: Team pulse ratings, coaching plan, and derived AI results (all encrypted).
  */
 export function upgradeSchema(db: IDBDatabase): void {
   if (!db.objectStoreNames.contains("projects")) {

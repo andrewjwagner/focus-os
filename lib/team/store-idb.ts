@@ -1,6 +1,18 @@
 import { getAll, getOne, openDb, put, putMany, remove, txDone } from "../idb";
 import { decryptJson, encryptJson } from "./crypto";
-import type { ActionItem, Envelope, Moment, Person, TeamNote, VaultMeta } from "./types";
+import { classifyMomentRule } from "./rules";
+import type {
+  ActionItem,
+  CachedAnalysis,
+  CoachingItem,
+  Envelope,
+  Moment,
+  Person,
+  PulseRating,
+  TalkingPoints,
+  TeamNote,
+  VaultMeta,
+} from "./types";
 
 /**
  * Team persistence. Note content, action item text, and moments are encrypted
@@ -50,7 +62,7 @@ type NoteSecret = Pick<
 >;
 type ItemSecret = Pick<ActionItem, "text" | "owner" | "due"> &
   Partial<Pick<ActionItem, "detail" | "ownerKind" | "ownerHint">>;
-type MomentSecret = Pick<Moment, "text" | "tag">;
+type MomentSecret = Pick<Moment, "text" | "tag"> & Partial<Pick<Moment, "type" | "typeEdited">>;
 
 export const META_VAULT = "team.vault";
 export const META_DIGEST_VIEWED = "team.digestViewedAt";
@@ -116,7 +128,15 @@ export async function savePerson(person: Person): Promise<void> {
 /** Delete a person and every note, item, and moment tied to them. */
 export async function deletePersonCascade(personId: string): Promise<void> {
   const db = await openDb();
-  const stores = ["teamPeople", "teamNotes", "teamItems", "teamMoments"] as const;
+  const stores = [
+    "teamPeople",
+    "teamNotes",
+    "teamItems",
+    "teamMoments",
+    "teamPulse",
+    "teamCoaching",
+    "teamDerived",
+  ] as const;
   const tx = db.transaction([...stores], "readwrite");
   tx.objectStore("teamPeople").delete(personId);
   for (const name of stores.slice(1)) {
@@ -205,7 +225,12 @@ export async function decryptItem(key: CryptoKey, stored: StoredItem): Promise<A
 }
 
 export async function encryptMoment(key: CryptoKey, moment: Moment): Promise<StoredMoment> {
-  const secret: MomentSecret = { text: moment.text, tag: moment.tag };
+  const secret: MomentSecret = {
+    text: moment.text,
+    tag: moment.tag,
+    type: moment.type,
+    typeEdited: moment.typeEdited,
+  };
   return {
     id: moment.id,
     personId: moment.personId,
@@ -222,14 +247,75 @@ export async function decryptMoment(key: CryptoKey, stored: StoredMoment): Promi
     personId: stored.personId,
     date: stored.date,
     createdAt: stored.createdAt,
-    ...secret,
+    text: secret.text,
+    tag: secret.tag,
+    // Moments saved before types existed: classify with rules.
+    type: secret.type ?? classifyMomentRule(secret.text, secret.tag),
+    typeEdited: secret.typeEdited ?? false,
   };
+}
+
+/** Generic encrypted record: plain id + personId for filtering, rest encrypted. */
+export type StoredSecret = { id: string; personId: string; enc: Envelope };
+
+type SecretStore = "teamPulse" | "teamCoaching" | "teamDerived";
+
+async function saveSecret<T extends { id: string; personId: string }>(
+  key: CryptoKey,
+  store: SecretStore,
+  values: T[],
+): Promise<void> {
+  const stored = await Promise.all(
+    values.map(async (value) => ({ id: value.id, personId: value.personId, enc: await encryptJson(key, value) })),
+  );
+  await putMany(store, stored);
+}
+
+async function loadSecrets<T>(key: CryptoKey, store: SecretStore): Promise<T[]> {
+  const stored = await getAll<StoredSecret>(store);
+  return Promise.all(stored.map((record) => decryptJson<T>(key, record.enc)));
+}
+
+export type DerivedRecord =
+  | ({ id: string; kind: "analysis" } & CachedAnalysis)
+  | ({ id: string; kind: "talking" } & TalkingPoints)
+  | { id: string; personId: string; kind: "recap"; noteId: string; text: string };
+
+export const analysisId = (noteId: string) => `analysis:${noteId}`;
+export const recapId = (noteId: string) => `recap:${noteId}`;
+export const talkingId = (personId: string) => `talking:${personId}`;
+
+export async function savePulses(key: CryptoKey, ratings: PulseRating[]): Promise<void> {
+  await saveSecret(key, "teamPulse", ratings);
+}
+
+export async function deletePulse(id: string): Promise<void> {
+  await remove("teamPulse", id);
+}
+
+export async function saveCoaching(key: CryptoKey, items: CoachingItem[]): Promise<void> {
+  await saveSecret(key, "teamCoaching", items);
+}
+
+export async function deleteCoaching(id: string): Promise<void> {
+  await remove("teamCoaching", id);
+}
+
+export async function deleteDerivedRecord(id: string): Promise<void> {
+  await remove("teamDerived", id);
+}
+
+export async function saveDerived(key: CryptoKey, records: DerivedRecord[]): Promise<void> {
+  await saveSecret(key, "teamDerived", records);
 }
 
 export async function loadTeamData(key: CryptoKey): Promise<{
   notes: TeamNote[];
   items: ActionItem[];
   moments: Moment[];
+  pulses: PulseRating[];
+  coaching: CoachingItem[];
+  derived: DerivedRecord[];
 }> {
   const [notes, items, moments] = await Promise.all([
     getAll<StoredNote>("teamNotes"),
@@ -240,6 +326,9 @@ export async function loadTeamData(key: CryptoKey): Promise<{
     notes: await Promise.all(notes.map((note) => decryptNote(key, note))),
     items: await Promise.all(items.map((item) => decryptItem(key, item))),
     moments: await Promise.all(moments.map((moment) => decryptMoment(key, moment))),
+    pulses: await loadSecrets<PulseRating>(key, "teamPulse"),
+    coaching: await loadSecrets<CoachingItem>(key, "teamCoaching"),
+    derived: await loadSecrets<DerivedRecord>(key, "teamDerived"),
   };
 }
 

@@ -108,6 +108,8 @@ export const DEMO_MOMENTS: Moment[] = [
     date: "2026-01-21",
     text: "Ran the team demo with no prep and handled questions well.",
     tag: "win",
+    type: "win",
+    typeEdited: false,
     createdAt: "2026-01-21T20:00:00.000Z",
   },
 ];
