@@ -1,6 +1,6 @@
 export const LOCAL_SESSION_KEY = "focus-os.session.v1";
 export const DB_NAME = "focus-os";
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 export const TIMEZONE = "America/New_York";
 
 /** Empty means open local mode: any non-empty email is allowed. */

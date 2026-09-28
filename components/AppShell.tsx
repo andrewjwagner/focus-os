@@ -3,16 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { useTeam } from "@/lib/team/context";
 
 const LINKS = [
   { href: "/", label: "Today" },
   { href: "/capture", label: "Capture" },
   { href: "/tabled", label: "Tabled" },
+  { href: "/team", label: "Team" },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const auth = useAuth();
+  const team = useTeam();
 
   return (
     <div className="min-h-screen">
@@ -38,6 +41,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   }`}
                 >
                   {link.label}
+                  {link.href === "/team" && team.digestHighlighted ? (
+                    <span
+                      aria-label="Weekly digest ready"
+                      className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-focus align-middle"
+                    />
+                  ) : null}
                 </Link>
               );
             })}
