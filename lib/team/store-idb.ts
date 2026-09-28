@@ -23,6 +23,8 @@ export type StoredItem = {
   personId: string;
   noteId: string | null;
   done: boolean;
+  ownerEdited?: boolean;
+  edited?: boolean;
   createdAt: string;
   enc: Envelope;
 };
@@ -37,13 +39,22 @@ export type StoredMoment = {
 
 type NoteSecret = Pick<
   TeamNote,
-  "title" | "webUrl" | "summaryMarkdown" | "summaryText" | "transcript" | "createdAt"
+  | "title"
+  | "webUrl"
+  | "summaryMarkdown"
+  | "summaryText"
+  | "transcript"
+  | "createdAt"
+  | "ownerName"
+  | "ownerEmail"
 >;
-type ItemSecret = Pick<ActionItem, "text" | "owner" | "due">;
+type ItemSecret = Pick<ActionItem, "text" | "owner" | "due"> &
+  Partial<Pick<ActionItem, "detail" | "ownerKind" | "ownerHint">>;
 type MomentSecret = Pick<Moment, "text" | "tag">;
 
 export const META_VAULT = "team.vault";
 export const META_DIGEST_VIEWED = "team.digestViewedAt";
+export const META_SELF_NAME = "team.selfName";
 
 async function getMeta(key: string): Promise<string | null> {
   const record = await getOne<MetaRecord>("meta", key);
@@ -74,6 +85,23 @@ export async function loadDigestViewedAt(): Promise<string | null> {
 
 export async function saveDigestViewedAt(iso: string): Promise<void> {
   await setMeta(META_DIGEST_VIEWED, iso);
+}
+
+/** "Your name" from Team settings. Local only. */
+export async function loadSelfName(): Promise<string> {
+  return (await getMeta(META_SELF_NAME)) ?? "";
+}
+
+export async function saveSelfName(name: string): Promise<void> {
+  await setMeta(META_SELF_NAME, name.trim());
+}
+
+export async function deleteItems(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const db = await openDb();
+  const tx = db.transaction("teamItems", "readwrite");
+  for (const id of ids) tx.objectStore("teamItems").delete(id);
+  await txDone(tx);
 }
 
 export async function loadPeople(): Promise<Person[]> {
@@ -111,6 +139,8 @@ export async function encryptNote(key: CryptoKey, note: TeamNote): Promise<Store
     summaryText: note.summaryText,
     transcript: note.transcript,
     createdAt: note.createdAt,
+    ownerName: note.ownerName,
+    ownerEmail: note.ownerEmail,
   };
   return {
     id: note.id,
@@ -133,12 +163,21 @@ export async function decryptNote(key: CryptoKey, stored: StoredNote): Promise<T
 }
 
 export async function encryptItem(key: CryptoKey, item: ActionItem): Promise<StoredItem> {
-  const secret: ItemSecret = { text: item.text, owner: item.owner, due: item.due };
+  const secret: ItemSecret = {
+    text: item.text,
+    detail: item.detail,
+    owner: item.owner,
+    ownerKind: item.ownerKind,
+    ownerHint: item.ownerHint,
+    due: item.due,
+  };
   return {
     id: item.id,
     personId: item.personId,
     noteId: item.noteId,
     done: item.done,
+    ownerEdited: item.ownerEdited,
+    edited: item.edited,
     createdAt: item.createdAt,
     enc: await encryptJson(key, secret),
   };
@@ -146,13 +185,22 @@ export async function encryptItem(key: CryptoKey, item: ActionItem): Promise<Sto
 
 export async function decryptItem(key: CryptoKey, stored: StoredItem): Promise<ActionItem> {
   const secret = await decryptJson<ItemSecret>(key, stored.enc);
+  // Items stored before owner kinds existed: infer from the old owner string.
+  const legacyKind = secret.owner === "me" ? "me" : secret.owner ? "other" : "unassigned";
   return {
     id: stored.id,
     personId: stored.personId,
     noteId: stored.noteId,
     done: stored.done,
+    ownerEdited: stored.ownerEdited ?? false,
+    edited: stored.edited ?? false,
     createdAt: stored.createdAt,
-    ...secret,
+    text: secret.text,
+    detail: secret.detail ?? "",
+    owner: secret.owner,
+    ownerKind: secret.ownerKind ?? legacyKind,
+    ownerHint: secret.ownerHint ?? secret.owner,
+    due: secret.due,
   };
 }
 

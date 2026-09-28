@@ -1,4 +1,4 @@
-import { extractActionItems } from "./extract";
+import { deriveItems } from "./sync";
 import type { ActionItem, Moment, Person, TeamNote } from "./types";
 
 /**
@@ -48,6 +48,8 @@ export const DEMO_NOTES: TeamNote[] = [
     ].join("\n"),
     summaryText: "Onboarding drop-off and career growth.",
     transcript: null,
+    ownerName: "Jordan Park",
+    ownerEmail: "jordan@example.com",
   },
   {
     id: "note-demo-alex-2",
@@ -70,6 +72,8 @@ export const DEMO_NOTES: TeamNote[] = [
     ].join("\n"),
     summaryText: "Onboarding test live. Hiring loop help.",
     transcript: null,
+    ownerName: "Jordan Park",
+    ownerEmail: "jordan@example.com",
   },
   {
     id: "note-demo-sam-1",
@@ -92,6 +96,8 @@ export const DEMO_NOTES: TeamNote[] = [
     ].join("\n"),
     summaryText: "Quarterly planning and headcount.",
     transcript: null,
+    ownerName: "Jordan Park",
+    ownerEmail: "jordan@example.com",
   },
 ];
 
@@ -106,6 +112,10 @@ export const DEMO_MOMENTS: Moment[] = [
   },
 ];
 
+/** Fictional "me" for the demo notes. */
+export const DEMO_SELF_NAME = "Jordan Park";
+
 export function demoItems(): ActionItem[] {
-  return DEMO_NOTES.flatMap((note) => extractActionItems(note));
+  return deriveItems({ notes: DEMO_NOTES, items: [], people: DEMO_PEOPLE, selfName: DEMO_SELF_NAME })
+    .upserts;
 }

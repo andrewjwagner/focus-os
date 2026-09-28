@@ -11,6 +11,8 @@ import { openItemsFor, roleLabel, shortDate } from "@/lib/team/view";
 function PersonCard({ person }: { person: Person }) {
   const team = useTeam();
   const open = openItemsFor(team.items, person.id);
+  const mine = open.filter((item) => item.ownerKind === "me");
+  const theirs = open.filter((item) => item.ownerKind === "them");
   const noteCount = team.notes.filter((note) => note.personId === person.id).length;
   return (
     <Link
@@ -26,11 +28,11 @@ function PersonCard({ person }: { person: Person }) {
           </p>
         </div>
         <span className="rounded-full bg-focus/15 px-2 py-0.5 text-[11px] text-focus">
-          {open.length} open
+          {mine.length} mine · {theirs.length} theirs
         </span>
       </div>
-      {open[0] ? (
-        <p className="mt-3 truncate text-sm text-muted">Next: {open[0].text}</p>
+      {mine[0] ? (
+        <p className="mt-3 truncate text-sm text-muted">My next: {mine[0].text}</p>
       ) : null}
     </Link>
   );

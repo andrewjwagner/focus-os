@@ -36,6 +36,7 @@ function PersonDetail({ id }: { id: string }) {
   const themes = useMemo(() => {
     const name = people.find((entry) => entry.id === id)?.name ?? "";
     const owners = items.map((item) => item.owner).filter((owner) => owner && owner !== "me");
+    owners.push(...items.map((item) => item.ownerHint).filter(Boolean));
     return extractThemes(notes, { exclude: [name, ...owners] });
   }, [notes, items, people, id]);
   const brief = useMemo(() => buildPrepBrief({ notes, items, moments }), [notes, items, moments]);
@@ -56,6 +57,20 @@ function PersonDetail({ id }: { id: string }) {
     .filter((item) => !item.done)
     .sort((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999"));
   const doneItems = items.filter((item) => item.done);
+  const firstName = person.name.split(/\s+/)[0] || "Their";
+  const otherItems = openItems.filter((item) => item.ownerKind === "other");
+  const otherNames = [...new Set(otherItems.map((item) => item.owner || "Other"))];
+  const buckets = [
+    { key: "me", title: "My action items", alwaysShow: true, items: openItems.filter((item) => item.ownerKind === "me") },
+    { key: "them", title: "Their commitments", alwaysShow: true, items: openItems.filter((item) => item.ownerKind === "them") },
+    { key: "unassigned", title: "Unassigned", alwaysShow: false, items: openItems.filter((item) => item.ownerKind === "unassigned") },
+    ...otherNames.map((name) => ({
+      key: `other-${name}`,
+      title: name,
+      alwaysShow: false,
+      items: otherItems.filter((item) => (item.owner || "Other") === name),
+    })),
+  ];
 
   async function onAddMoment(event: FormEvent) {
     event.preventDefault();
@@ -98,25 +113,30 @@ function PersonDetail({ id }: { id: string }) {
         )}
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
-            <h3 className="text-xs uppercase tracking-wide text-muted">Still open</h3>
-            <ul className="mt-2 space-y-1 text-sm text-ink">
-              {brief.stillOpen.length === 0 ? <li className="text-muted">Nothing open.</li> : null}
-              {brief.stillOpen.map((item) => (
-                <li key={item.id}>
-                  {item.text}
-                  {item.owner ? <span className="text-muted"> ({item.owner})</span> : null}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h3 className="text-xs uppercase tracking-wide text-muted">My follow-ups</h3>
+            <h3 className="text-xs uppercase tracking-wide text-muted">My open items</h3>
             <ul className="mt-2 space-y-1 text-sm text-ink">
               {brief.followUps.length === 0 ? <li className="text-muted">None.</li> : null}
               {brief.followUps.map((item) => (
                 <li key={item.id}>{item.text}</li>
               ))}
             </ul>
+          </div>
+          <div>
+            <h3 className="text-xs uppercase tracking-wide text-muted">
+              Follow up on {firstName}&apos;s commitments
+            </h3>
+            <ul className="mt-2 space-y-1 text-sm text-ink">
+              {brief.theirCommitments.length === 0 ? <li className="text-muted">None.</li> : null}
+              {brief.theirCommitments.map((item) => (
+                <li key={item.id}>{item.text}</li>
+              ))}
+            </ul>
+            {brief.unassigned.length > 0 ? (
+              <p className="mt-2 text-xs text-muted">
+                {brief.unassigned.length} unassigned item{brief.unassigned.length === 1 ? "" : "s"} below
+                need an owner.
+              </p>
+            ) : null}
           </div>
           <div>
             <h3 className="text-xs uppercase tracking-wide text-muted">Raised last time</h3>
@@ -141,9 +161,9 @@ function PersonDetail({ id }: { id: string }) {
         </div>
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-5">
         <div className="flex items-center justify-between">
-          <h2 className="font-display text-2xl text-ink">Open action items</h2>
+          <h2 className="font-display text-2xl text-ink">Action items</h2>
           {doneItems.length > 0 ? (
             <button
               type="button"
@@ -154,29 +174,45 @@ function PersonDetail({ id }: { id: string }) {
             </button>
           ) : null}
         </div>
-        <ul className="space-y-2">
-          {openItems.length === 0 ? (
-            <li className="rounded-xl border border-dashed border-line px-3 py-3 text-sm text-muted">
-              No open items.
-            </li>
-          ) : null}
-          {openItems.map((item) => (
-            <ItemRow
-              key={item.id}
-              item={item}
-              note={item.noteId ? noteById.get(item.noteId) : undefined}
-            />
-          ))}
-          {showDone
-            ? doneItems.map((item) => (
+        {buckets.map((bucket) =>
+          bucket.items.length === 0 && !bucket.alwaysShow ? null : (
+            <div key={bucket.key} className="space-y-2">
+              <h3 className="text-xs uppercase tracking-wide text-muted">
+                {bucket.title} ({bucket.items.length})
+              </h3>
+              <ul className="space-y-2">
+                {bucket.items.length === 0 ? (
+                  <li className="rounded-xl border border-dashed border-line px-3 py-3 text-sm text-muted">
+                    Nothing here.
+                  </li>
+                ) : null}
+                {bucket.items.map((item) => (
+                  <ItemRow
+                    key={item.id}
+                    item={item}
+                    personName={person.name}
+                    note={item.noteId ? noteById.get(item.noteId) : undefined}
+                  />
+                ))}
+              </ul>
+            </div>
+          ),
+        )}
+        {showDone && doneItems.length > 0 ? (
+          <div className="space-y-2">
+            <h3 className="text-xs uppercase tracking-wide text-muted">Done</h3>
+            <ul className="space-y-2">
+              {doneItems.map((item) => (
                 <ItemRow
                   key={item.id}
                   item={item}
+                  personName={person.name}
                   note={item.noteId ? noteById.get(item.noteId) : undefined}
                 />
-              ))
-            : null}
-        </ul>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <form onSubmit={onAddItem} className="flex gap-2">
           <input
             className={fieldClass}

@@ -88,6 +88,8 @@ describe("GranolaClient", () => {
     expect(results[0].notes.map((note) => note.id)).toEqual(["not_1", "not_2"]);
     expect(results[0].notes[0].meetingAt).toBe("2026-03-02T14:30:00Z");
     expect(results[0].notes[0].transcript).toEqual([{ speaker: "me", text: "hi" }]);
+    expect(results[0].notes[0].ownerName).toBe("Test Owner");
+    expect(results[0].notes[0].ownerEmail).toBe("owner@example.com");
     expect(results[1]).toEqual({ personId: "p2", folderFound: false, notes: [] });
     expect(calls.every((call) => call.auth === "Bearer test-key")).toBe(true);
     expect(calls.some((call) => call.url.searchParams.get("folder_id") === "fol_bbbbbbbbbbbbbb")).toBe(false);

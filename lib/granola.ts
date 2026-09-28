@@ -16,11 +16,13 @@ const MAX_TRANSCRIPT_PAGES = 50;
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 export class GranolaError extends Error {
-  constructor(
-    public readonly status: number,
-    public readonly code: string,
-  ) {
+  readonly status: number;
+  readonly code: string;
+
+  constructor(status: number, code: string) {
     super(`Granola request failed (${status} ${code})`);
+    this.status = status;
+    this.code = code;
   }
 }
 
@@ -38,6 +40,9 @@ export type SyncedNote = {
   summaryMarkdown: string;
   summaryText: string;
   transcript: TranscriptLine[] | null;
+  /** Note owner, which is the API key holder. Used to recognize "me". */
+  ownerName: string;
+  ownerEmail: string;
 };
 
 export type GranolaClientOptions = {
@@ -101,6 +106,8 @@ export function normalizeNote(raw: unknown): SyncedNote | null {
     summaryMarkdown: str(data.summary_markdown) || str(data.summaryMarkdown),
     summaryText: str(data.summary_text) || str(data.summaryText),
     transcript: Array.isArray(data.transcript) ? normalizeTranscript(data.transcript) : null,
+    ownerName: str(obj(data.owner).name),
+    ownerEmail: str(obj(data.owner).email),
   };
 }
 

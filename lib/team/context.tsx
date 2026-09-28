@@ -16,8 +16,10 @@ import { DEMO_MOMENTS, DEMO_NOTES, DEMO_PEOPLE, demoItems } from "./seed";
 import {
   deleteItem as deleteItemRecord,
   deleteMoment as deleteMomentRecord,
+  deleteItems,
   deletePersonCascade,
   loadDigestViewedAt,
+  loadSelfName,
   loadPeople,
   loadTeamData,
   loadVaultMeta,
@@ -26,15 +28,25 @@ import {
   saveMoment,
   saveNotes,
   savePerson,
+  saveSelfName,
   saveVaultMeta,
 } from "./store-idb";
 import {
   SYNC_INTERVAL_MS,
   buildSyncTargets,
+  deriveItems,
   mergeSyncResponse,
   type SyncResponse,
 } from "./sync";
-import type { ActionItem, Moment, Person, TeamNote, TeamRole, VaultMeta } from "./types";
+import type {
+  ActionItem,
+  Moment,
+  OwnerKind,
+  Person,
+  TeamNote,
+  TeamRole,
+  VaultMeta,
+} from "./types";
 
 export type SyncStatus = {
   running: boolean;
@@ -55,6 +67,8 @@ type TeamState = {
   moments: Moment[];
   sync: SyncStatus;
   digestHighlighted: boolean;
+  selfName: string;
+  setSelfName: (name: string) => Promise<void>;
   setPassphrase: (passphrase: string) => Promise<void>;
   unlock: (passphrase: string) => Promise<boolean>;
   lock: () => void;
@@ -63,7 +77,8 @@ type TeamState = {
   removePerson: (id: string) => Promise<void>;
   loadDemoTeam: () => Promise<void>;
   syncNow: (options?: { ifOlderThanMs?: number }) => Promise<void>;
-  updateItem: (id: string, patch: Partial<Pick<ActionItem, "text" | "owner" | "due" | "done">>) => Promise<void>;
+  updateItem: (id: string, patch: Partial<Pick<ActionItem, "text" | "due" | "done">>) => Promise<void>;
+  setItemOwner: (id: string, kind: OwnerKind, name?: string) => Promise<void>;
   addItem: (personId: string, text: string) => Promise<void>;
   removeItem: (id: string) => Promise<void>;
   addMoment: (input: { personId: string; date: string; text: string; tag: string }) => Promise<void>;
@@ -98,6 +113,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ActionItem[]>([]);
   const [moments, setMoments] = useState<Moment[]>([]);
   const [digestViewedAt, setDigestViewedAt] = useState<string | null>(null);
+  const [selfName, setSelfNameState] = useState("");
   const [now, setNow] = useState(() => new Date());
   const [sync, setSync] = useState<SyncStatus>({
     running: false,
@@ -109,6 +125,8 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   const lastSyncRun = useRef(0);
   const peopleRef = useRef<Person[]>([]);
   const itemsRef = useRef<ActionItem[]>([]);
+  const notesRef = useRef<TeamNote[]>([]);
+  const selfNameRef = useRef("");
 
   useEffect(() => {
     peopleRef.current = people;
@@ -116,15 +134,22 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
+  useEffect(() => {
+    notesRef.current = notes;
+  }, [notes]);
+  useEffect(() => {
+    selfNameRef.current = selfName;
+  }, [selfName]);
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([loadVaultMeta(), loadPeople(), loadDigestViewedAt()]).then(
-      ([meta, loadedPeople, viewed]) => {
+    void Promise.all([loadVaultMeta(), loadPeople(), loadDigestViewedAt(), loadSelfName()]).then(
+      ([meta, loadedPeople, viewed, name]) => {
         if (cancelled) return;
         setVault(meta);
         setPeople(loadedPeople);
         setDigestViewedAt(viewed);
+        setSelfNameState(name);
         setReady(true);
       },
     );
@@ -135,12 +160,53 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const hydrate = useCallback(async (sessionKey: CryptoKey) => {
-    const data = await loadTeamData(sessionKey);
-    setNotes(data.notes);
-    setItems(data.items);
-    setMoments(data.moments);
-  }, []);
+  /** Re-derive note-backed items (ownership, new and stale items) and persist. */
+  const rederive = useCallback(
+    async (sessionKey: CryptoKey, input: { notes: TeamNote[]; people: Person[]; selfName: string }) => {
+      const result = deriveItems({ ...input, items: itemsRef.current });
+      if (result.upserts.length === 0 && result.deletes.length === 0) return;
+      await saveItems(sessionKey, result.upserts);
+      await deleteItems(result.deletes);
+      const gone = new Set(result.deletes);
+      const changed = new Map(result.upserts.map((item) => [item.id, item]));
+      setItems((prev) => {
+        const kept = prev.filter((item) => !gone.has(item.id)).map((item) => changed.get(item.id) ?? item);
+        const known = new Set(kept.map((item) => item.id));
+        return [...kept, ...result.upserts.filter((item) => !known.has(item.id))];
+      });
+    },
+    [],
+  );
+
+  const hydrate = useCallback(
+    async (sessionKey: CryptoKey) => {
+      const data = await loadTeamData(sessionKey);
+      itemsRef.current = data.items;
+      notesRef.current = data.notes;
+      setNotes(data.notes);
+      setItems(data.items);
+      setMoments(data.moments);
+      await rederive(sessionKey, {
+        notes: data.notes,
+        people: peopleRef.current,
+        selfName: selfNameRef.current,
+      });
+    },
+    [rederive],
+  );
+
+  const setSelfName = useCallback<TeamState["setSelfName"]>(
+    async (name) => {
+      const trimmed = name.trim();
+      setSelfNameState(trimmed);
+      selfNameRef.current = trimmed;
+      await saveSelfName(trimmed);
+      if (key) {
+        await rederive(key, { notes: notesRef.current, people: peopleRef.current, selfName: trimmed });
+      }
+    },
+    [key, rederive],
+  );
 
   const setPassphrase = useCallback<TeamState["setPassphrase"]>(
     async (passphrase) => {
@@ -234,7 +300,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         return;
       }
       const currentPeople = peopleRef.current;
-      const targets = buildSyncTargets(currentPeople);
+      const targets = buildSyncTargets(currentPeople, notesRef.current);
       if (targets.length === 0) return;
       syncing.current = true;
       lastSyncRun.current = Date.now();
@@ -255,21 +321,22 @@ export function TeamProvider({ children }: { children: ReactNode }) {
           });
           return;
         }
-        const merged = mergeSyncResponse(
-          data,
-          currentPeople,
-          new Set(itemsRef.current.map((item) => item.id)),
-        );
+        const merged = mergeSyncResponse(data, currentPeople);
         await saveNotes(key, merged.notes);
-        await saveItems(key, merged.newItems);
         for (const person of merged.people) {
           if (person.lastSync !== currentPeople.find((p) => p.id === person.id)?.lastSync) {
             await savePerson(person);
           }
         }
         const noteIds = new Set(merged.notes.map((note) => note.id));
-        setNotes((prev) => [...prev.filter((note) => !noteIds.has(note.id)), ...merged.notes]);
-        setItems((prev) => [...prev, ...merged.newItems]);
+        const allNotes = [
+          ...notesRef.current.filter((note) => !noteIds.has(note.id)),
+          ...merged.notes,
+        ];
+        notesRef.current = allNotes;
+        setNotes(allNotes);
+        // Re-derive ownership for every stored note, not just new ones.
+        await rederive(key, { notes: allNotes, people: merged.people, selfName: selfNameRef.current });
         setPeople((prev) =>
           prev.map((person) => merged.people.find((p) => p.id === person.id) ?? person),
         );
@@ -294,7 +361,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         syncing.current = false;
       }
     },
-    [key],
+    [key, rederive],
   );
 
   // Background sync every 30 minutes while the app is open and unlocked.
@@ -309,7 +376,22 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       if (!key) return;
       const current = itemsRef.current.find((item) => item.id === id);
       if (!current) return;
-      const next = { ...current, ...patch };
+      const next = { ...current, ...patch, edited: true };
+      setItems((prev) => prev.map((item) => (item.id === id ? next : item)));
+      await saveItems(key, [next]);
+    },
+    [key],
+  );
+
+  const setItemOwner = useCallback<TeamState["setItemOwner"]>(
+    async (id, kind, name) => {
+      if (!key) return;
+      const current = itemsRef.current.find((item) => item.id === id);
+      if (!current) return;
+      const person = peopleRef.current.find((entry) => entry.id === current.personId);
+      const owner =
+        kind === "me" ? "me" : kind === "them" ? (person?.name ?? "") : kind === "other" ? (name ?? "").trim() : "";
+      const next: ActionItem = { ...current, ownerKind: kind, owner, ownerEdited: true };
       setItems((prev) => prev.map((item) => (item.id === id ? next : item)));
       await saveItems(key, [next]);
     },
@@ -324,7 +406,12 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         personId,
         noteId: null,
         text: text.trim(),
+        detail: "",
+        ownerKind: "unassigned",
         owner: "",
+        ownerHint: "",
+        ownerEdited: false,
+        edited: true,
         due: null,
         done: false,
         createdAt: stamp(),
@@ -381,6 +468,8 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       moments,
       sync,
       digestHighlighted,
+      selfName,
+      setSelfName,
       setPassphrase,
       unlock,
       lock,
@@ -390,6 +479,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       loadDemoTeam,
       syncNow,
       updateItem,
+      setItemOwner,
       addItem,
       removeItem,
       addMoment,
@@ -406,6 +496,8 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       moments,
       sync,
       digestHighlighted,
+      selfName,
+      setSelfName,
       setPassphrase,
       unlock,
       lock,
@@ -415,6 +507,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       loadDemoTeam,
       syncNow,
       updateItem,
+      setItemOwner,
       addItem,
       removeItem,
       addMoment,

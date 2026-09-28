@@ -17,7 +17,9 @@ function Digest() {
     if (digestHighlighted) void markDigestViewed();
   }, [digestHighlighted, markDigestViewed]);
 
-  const openTotal = team.items.filter((item) => !item.done).length;
+  const openTotal = team.items.filter(
+    (item) => !item.done && (item.ownerKind === "me" || item.ownerKind === "them"),
+  ).length;
 
   return (
     <div className="space-y-8">
@@ -49,7 +51,7 @@ function Digest() {
           items: team.items.filter((item) => item.personId === person.id),
           moments: team.moments.filter((moment) => moment.personId === person.id),
         });
-        const open = [...brief.stillOpen, ...brief.followUps];
+        const firstName = person.name.split(/\s+/)[0] || "Their";
         return (
           <section key={person.id} className="space-y-3 rounded-2xl border border-line bg-bg-elev p-4">
             <div className="flex items-baseline justify-between gap-3">
@@ -61,15 +63,39 @@ function Digest() {
                 {brief.lastNote ? ` · last 1:1 ${shortDate(brief.lastNote.meetingAt)}` : ""}
               </span>
             </div>
-            {open.length === 0 ? (
+            {brief.followUps.length === 0 && brief.theirCommitments.length === 0 ? (
               <p className="text-sm text-muted">No open loops.</p>
-            ) : (
-              <ul className="space-y-2">
-                {open.map((item) => (
-                  <ItemRow key={item.id} item={item} editable={false} />
-                ))}
-              </ul>
-            )}
+            ) : null}
+            {brief.followUps.length > 0 ? (
+              <div className="space-y-2">
+                <h3 className="text-xs uppercase tracking-wide text-muted">My open items</h3>
+                <ul className="space-y-2">
+                  {brief.followUps.map((item) => (
+                    <ItemRow key={item.id} item={item} personName={person.name} editable={false} />
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {brief.theirCommitments.length > 0 ? (
+              <div className="space-y-2">
+                <h3 className="text-xs uppercase tracking-wide text-muted">
+                  Follow up on {firstName}&apos;s commitments
+                </h3>
+                <ul className="space-y-2">
+                  {brief.theirCommitments.map((item) => (
+                    <ItemRow key={item.id} item={item} personName={person.name} editable={false} />
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {brief.unassigned.length > 0 ? (
+              <p className="text-xs text-muted">
+                {brief.unassigned.length} unassigned item{brief.unassigned.length === 1 ? "" : "s"}.{" "}
+                <Link href={`/team/${person.id}`} className="text-focus hover:underline">
+                  Assign owners
+                </Link>
+              </p>
+            ) : null}
             {brief.lastTopics.length > 0 ? (
               <p className="text-xs text-muted">Raised last time: {brief.lastTopics.join(", ")}</p>
             ) : null}

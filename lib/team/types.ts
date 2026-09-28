@@ -31,7 +31,14 @@ export type TeamNote = {
   summaryMarkdown: string;
   summaryText: string;
   transcript: TranscriptLine[] | null;
+  /** Granola note owner (the API key holder, so "me"). Missing on notes synced before v2 parsing. */
+  ownerName?: string;
+  ownerEmail?: string;
 };
+
+export const OWNER_KINDS = ["me", "them", "other", "unassigned"] as const;
+/** Relative to the person whose note the item came from. */
+export type OwnerKind = (typeof OWNER_KINDS)[number];
 
 export type ActionItem = {
   id: string;
@@ -39,8 +46,17 @@ export type ActionItem = {
   /** Source note id, or null for items added by hand. */
   noteId: string | null;
   text: string;
-  /** "me", a name, or "" when unknown. Editable. */
+  /** Extra context from continuation lines or nested bullets. */
+  detail: string;
+  ownerKind: OwnerKind;
+  /** Display name for ownerKind "other" (and the resolved name otherwise). */
   owner: string;
+  /** Raw owner label found in the note ("" when none). Used to re-derive ownership. */
+  ownerHint: string;
+  /** True once the user reassigned the owner. Re-syncs never override it. */
+  ownerEdited: boolean;
+  /** True once the user edited text, due date, or done state. */
+  edited: boolean;
   /** YYYY-MM-DD or null. */
   due: string | null;
   done: boolean;
@@ -61,8 +77,11 @@ export type Theme = { label: string; count: number };
 
 export type PrepBrief = {
   lastNote: { id: string; title: string; meetingAt: string; webUrl: string } | null;
-  stillOpen: ActionItem[];
+  /** My open action items. */
   followUps: ActionItem[];
+  /** Their open commitments to follow up on. */
+  theirCommitments: ActionItem[];
+  unassigned: ActionItem[];
   lastTopics: string[];
   momentsSince: Moment[];
 };

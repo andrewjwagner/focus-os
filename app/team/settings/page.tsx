@@ -140,6 +140,35 @@ function PersonRow({ person }: { person: Person }) {
   );
 }
 
+function SelfNameForm() {
+  const team = useTeam();
+  const [saved, setSaved] = useState(false);
+  return (
+    <form
+      key={team.selfName}
+      onSubmit={async (event) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        await team.setSelfName(String(data.get("selfName") ?? ""));
+        setSaved(true);
+      }}
+      className="flex flex-wrap items-center gap-2"
+    >
+      <input
+        name="selfName"
+        className={`${fieldClass} max-w-xs`}
+        placeholder="Your full name"
+        defaultValue={team.selfName}
+        onChange={() => setSaved(false)}
+      />
+      <button type="submit" className="rounded-full border border-line px-4 py-1.5 text-sm text-ink">
+        Save
+      </button>
+      {saved ? <span className="text-xs text-muted">Saved. Owners re-checked.</span> : null}
+    </form>
+  );
+}
+
 function TeamSettings() {
   const team = useTeam();
   return (
@@ -154,6 +183,15 @@ function TeamSettings() {
         <div className="mt-4">
           <TeamNav />
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-line bg-bg-elev p-4">
+        <h2 className="text-sm font-medium text-ink">Your name</h2>
+        <p className="mb-3 mt-1 text-xs leading-5 text-muted">
+          Used to tell your action items apart from theirs. Granola&apos;s note owner is also
+          treated as you. Stored only in this browser.
+        </p>
+        <SelfNameForm />
       </section>
 
       <section className="rounded-2xl border border-line bg-bg-elev p-4">

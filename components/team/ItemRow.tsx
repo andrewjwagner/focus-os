@@ -1,21 +1,87 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useTeam } from "@/lib/team/context";
-import type { ActionItem, TeamNote } from "@/lib/team/types";
+import { ownerLabel } from "@/lib/team/owner";
+import type { ActionItem, OwnerKind, TeamNote } from "@/lib/team/types";
 import { isOverdue, shortDate, todayIso } from "@/lib/team/view";
 
 const inlineField =
   "rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-xs text-muted outline-none hover:border-line focus:border-focus focus:text-ink";
 
+function OwnerPicker({ item, personName }: { item: ActionItem; personName: string }) {
+  const team = useTeam();
+  const [otherOpen, setOtherOpen] = useState(false);
+  const themLabel = personName.split(/\s+/)[0] || "Them";
+  const options: { kind: OwnerKind; label: string }[] = [
+    { kind: "me", label: "Me" },
+    { kind: "them", label: themLabel },
+    { kind: "other", label: item.ownerKind === "other" && item.owner ? item.owner : "Other" },
+  ];
+
+  return (
+    <span className="flex flex-wrap items-center gap-1" role="group" aria-label="Owner">
+      {options.map((option) => {
+        const active = item.ownerKind === option.kind;
+        return (
+          <button
+            key={option.kind}
+            type="button"
+            aria-pressed={active}
+            onClick={() => {
+              if (option.kind === "other") setOtherOpen(true);
+              else void team.setItemOwner(item.id, option.kind);
+            }}
+            className={`rounded-full border px-2 py-0.5 text-[11px] ${
+              active ? "border-focus/60 bg-focus/15 text-ink" : "border-line text-muted hover:text-ink"
+            }`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+      {otherOpen ? (
+        <input
+          autoFocus
+          className={`${inlineField} w-28 border-line`}
+          placeholder="Name"
+          defaultValue={item.ownerKind === "other" ? item.owner : ""}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setOtherOpen(false);
+            if (event.key === "Enter") event.currentTarget.blur();
+          }}
+          onBlur={(event) => {
+            const name = event.target.value.trim();
+            if (name) void team.setItemOwner(item.id, "other", name);
+            setOtherOpen(false);
+          }}
+        />
+      ) : null}
+      {item.ownerKind !== "unassigned" ? (
+        <button
+          type="button"
+          onClick={() => void team.setItemOwner(item.id, "unassigned")}
+          className="px-1 text-[11px] text-muted hover:text-ink"
+          title="Mark owner unclear"
+        >
+          Clear
+        </button>
+      ) : null}
+    </span>
+  );
+}
+
 export function ItemRow({
   item,
   note,
+  personName,
   showPerson,
   editable = true,
 }: {
   item: ActionItem;
   note?: TeamNote;
+  personName: string;
   showPerson?: { id: string; name: string };
   editable?: boolean;
 }) {
@@ -35,7 +101,8 @@ export function ItemRow({
         <p className={`text-sm ${item.done ? "text-muted line-through" : "text-ink"}`}>
           {item.text}
         </p>
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+        {item.detail ? <p className="mt-0.5 text-xs leading-5 text-muted">{item.detail}</p> : null}
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
           {showPerson ? (
             <Link href={`/team/${showPerson.id}`} className="text-focus hover:underline">
               {showPerson.name}
@@ -43,19 +110,7 @@ export function ItemRow({
           ) : null}
           {editable ? (
             <>
-              <label className="flex items-center gap-1">
-                Owner
-                <input
-                  key={`owner-${item.owner}`}
-                  className={`${inlineField} w-24`}
-                  defaultValue={item.owner}
-                  placeholder="unset"
-                  onBlur={(event) => {
-                    const owner = event.target.value.trim();
-                    if (owner !== item.owner) void team.updateItem(item.id, { owner });
-                  }}
-                />
-              </label>
+              <OwnerPicker item={item} personName={personName} />
               <label className={`flex items-center gap-1 ${overdue ? "text-danger" : ""}`}>
                 Due
                 <input
@@ -70,7 +125,7 @@ export function ItemRow({
             </>
           ) : (
             <>
-              <span>Owner: {item.owner || "unset"}</span>
+              <span>Owner: {ownerLabel(item, personName)}</span>
               {item.due ? (
                 <span className={overdue ? "text-danger" : ""}>Due {shortDate(item.due)}</span>
               ) : null}
