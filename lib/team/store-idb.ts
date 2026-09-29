@@ -108,6 +108,40 @@ export async function saveSelfName(name: string): Promise<void> {
   await setMeta(META_SELF_NAME, name.trim());
 }
 
+/** Stores that hold ciphertext made with the passphrase key. */
+export const ENCRYPTED_TEAM_STORES = [
+  "teamNotes",
+  "teamItems",
+  "teamMoments",
+  "teamPulse",
+  "teamCoaching",
+  "teamDerived",
+] as const;
+
+/**
+ * Forgotten passphrase: permanently delete everything encrypted with the old
+ * key (synced notes cache, action items and owner edits, moments, pulse
+ * ratings, coaching plan, AI results) plus the vault salt and verifier.
+ *
+ * Kept on purpose: the people list (names, roles, Granola folder names, not
+ * encrypted) so Granola can re-sync, with lastSync cleared so the next sync
+ * pulls every note again. Your name and the digest timestamp stay too.
+ * Capture data (projects, thoughts, lanes, other meta) is never touched.
+ * One transaction, so a failure leaves nothing half deleted.
+ */
+export async function resetTeamVault(): Promise<void> {
+  const db = await openDb();
+  const tx = db.transaction([...ENCRYPTED_TEAM_STORES, "teamPeople", "meta"], "readwrite");
+  for (const store of ENCRYPTED_TEAM_STORES) tx.objectStore(store).clear();
+  tx.objectStore("meta").delete(META_VAULT);
+  const people = tx.objectStore("teamPeople");
+  const request = people.getAll();
+  request.onsuccess = () => {
+    for (const person of request.result as Person[]) people.put({ ...person, lastSync: null });
+  };
+  await txDone(tx);
+}
+
 export async function deleteItems(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   const db = await openDb();

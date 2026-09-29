@@ -64,7 +64,8 @@ A single-user view of your manager and direct reports, built from your Granola 1
   - **Recap drafts**: an email-style follow-up for each synced 1:1 to copy into your mail app. Nothing is sent.
 - **Weekly digest**: open loops and prep for everyone. The Team tab is highlighted from Sunday 5pm ET until you open the digest.
 - **Extraction**: works without an LLM. Action items come from "Action items" or "Next steps" style sections in the Granola summary. Owners and due dates are guessed from the text and are editable. With an AI provider configured (below), one AI pass per note does this better.
-- **Encryption at rest**: on first use you set a passphrase. Note content, action items, and moments are encrypted in IndexedDB with AES-GCM using a PBKDF2 derived key. The key is kept in memory for the session only. A forgotten passphrase cannot be recovered.
+- **Encryption at rest**: on first use you set a passphrase. Note content, action items, and moments are encrypted in IndexedDB with AES-GCM using a PBKDF2 derived key. The key is kept in memory for the session only. A forgotten passphrase cannot be recovered; save it in a password manager.
+- **Forgot passphrase**: the unlock screen has "Forgot passphrase? Reset Team data". After you type `RESET`, it permanently deletes only the encrypted Team data on this device (synced notes cache, action items and owner edits, moments, pulse ratings, coaching plan, AI results) and the vault salt and verifier. Your people list, your name, and all Capture and Projects data are kept. You then set a new passphrase and Granola notes re-sync from scratch.
 
 ### Granola sync
 

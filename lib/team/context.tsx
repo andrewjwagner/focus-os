@@ -52,6 +52,7 @@ import {
   saveNotes,
   savePerson,
   saveSelfName,
+  resetTeamVault,
   saveVaultMeta,
 } from "./store-idb";
 import {
@@ -97,6 +98,10 @@ type TeamState = {
   selfName: string;
   setSelfName: (name: string) => Promise<void>;
   setPassphrase: (passphrase: string) => Promise<void>;
+  /** Forgot passphrase: wipe encrypted Team data, then ask for a new passphrase and re-sync. */
+  resetTeam: () => Promise<void>;
+  /** True between a reset and the first sync after the new passphrase. */
+  resetPending: boolean;
   unlock: (passphrase: string) => Promise<boolean>;
   lock: () => void;
   addPerson: (input: PersonInput) => Promise<void>;
@@ -311,6 +316,9 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     [hydrate, vault],
   );
 
+  const resyncAfterReset = useRef(false);
+  const [resetPending, setResetPending] = useState(false);
+
   const lock = useCallback(() => {
     setKey(null);
     setNotes([]);
@@ -321,6 +329,19 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     setDerived({});
     derivedRef.current = {};
   }, []);
+
+  const resetTeam = useCallback<TeamState["resetTeam"]>(async () => {
+    await resetTeamVault();
+    lock();
+    itemsRef.current = [];
+    notesRef.current = [];
+    const cleared = peopleRef.current.map((person) => ({ ...person, lastSync: null }));
+    peopleRef.current = cleared;
+    setPeople(cleared);
+    setVault(null);
+    resyncAfterReset.current = true;
+    setResetPending(true);
+  }, [lock]);
 
   const putDerived = useCallback(async (sessionKey: CryptoKey, records: DerivedRecord[]) => {
     if (records.length === 0) return;
@@ -516,6 +537,16 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     },
     [key, rederive, analyzePending],
   );
+
+  // After a reset and a new passphrase, pull every Granola note again.
+  useEffect(() => {
+    if (!key || !resyncAfterReset.current) return;
+    resyncAfterReset.current = false;
+    const timer = setTimeout(() => {
+      void syncNow().finally(() => setResetPending(false));
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [key, syncNow]);
 
   // AI pass on unlock too (covers notes synced while AI was off, and demo notes).
   useEffect(() => {
@@ -807,6 +838,8 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       selfName,
       setSelfName,
       setPassphrase,
+      resetTeam,
+      resetPending,
       unlock,
       lock,
       addPerson,
@@ -851,6 +884,8 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       selfName,
       setSelfName,
       setPassphrase,
+      resetTeam,
+      resetPending,
       unlock,
       lock,
       addPerson,
