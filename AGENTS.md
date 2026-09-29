@@ -9,3 +9,8 @@ Product rules:
 - IndexedDB is the store until Firebase is wired.
 - Capture saves locally first, then POSTs `/api/capture/triage` which may
   forward to `TRIAGE_WEBHOOK_URL` with `Authorization: Bearer <TRIAGE_WEBHOOK_SECRET>`.
+- Team tab data (people, notes, items, moments) lives in IndexedDB v3. Note
+  content, items, and moments are AES-GCM encrypted with a passphrase key.
+  `GRANOLA_API_KEY` is read only in `app/api/granola/sync/route.ts`.
+- Public repo: never commit real names, emails, meeting content, or API keys.
+  `lib/privacy.test.ts` guards this.

@@ -3,16 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { useTeam } from "@/lib/team/context";
 
 const LINKS = [
   { href: "/", label: "Today" },
   { href: "/capture", label: "Capture" },
   { href: "/tabled", label: "Tabled" },
+  { href: "/team", label: "Team" },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const auth = useAuth();
+  const team = useTeam();
 
   return (
     <div className="min-h-screen">
@@ -38,13 +41,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   }`}
                 >
                   {link.label}
+                  {link.href === "/team" && team.digestHighlighted ? (
+                    <span
+                      aria-label="Weekly digest ready"
+                      className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-focus align-middle"
+                    />
+                  ) : null}
                 </Link>
               );
             })}
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-3xl px-5 py-8">{children}</main>
+      <main
+        className={`mx-auto px-5 py-8 ${/^\/team\/(?!settings|digest)[^/]+/.test(pathname) ? "max-w-5xl" : "max-w-3xl"}`}
+      >
+        {children}
+      </main>
       <footer className="mx-auto max-w-3xl px-5 pb-10 text-xs text-muted">
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-4">
           <span>
